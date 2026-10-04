@@ -1,0 +1,20 @@
+# ---- 构建产物（随取随建：./mvnw package && bash scripts/build-dist.sh）----
+target/
+dist/
+*.class
+
+# ---- 本地工具与运行数据 ----
+# tools/ 为自举用 Maven 发行版（提交 mvnw 后由 wrapper 自行下载）
+tools/
+data/
+*.log
+.DS_Store
+*.local.yml
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project

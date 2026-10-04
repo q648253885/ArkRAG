@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ArkRAG 面板 · 宿主模拟器（UI 验收专用）</title>
+<style>
+  body { font: 13px/1.5 -apple-system, 'PingFang SC', sans-serif; margin: 0; background: #2b2d31; color: #eee;
+         display: flex; flex-direction: column; height: 100vh; }
+  .bar { flex: none; padding: 8px 12px; background: #1e1f22; display: flex; gap: 10px; align-items: center; }
+  .bar button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid #555;
+                background: #33343a; color: #eee; cursor: pointer; }
+  .bar .spacer { flex: 1; }
+  .bar small { color: #999; }
+  #frame { flex: 1; border: 0; background: #fff; width: 440px; margin: 0 auto; display: block;
+           box-shadow: 0 0 40px rgba(0,0,0,.5); height: calc(100% - 40px); }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <b>ArkWork 宿主模拟器</b>
+    <small>报文契约 = sample-plugins.ts（lifecycle/call/reply）</small>
+    <span class="spacer"></span>
+    <button onclick="setTheme('light')">注入浅色主题</button>
+    <button onclick="setTheme('dark')">注入深色主题</button>
+  </div>
+  <iframe id="frame" src="../plugin/arkrag/index.html"></iframe>
+
+<script>
+/* 与 ArkWork plugin-theme-tokens 白名单一致的回退值（模拟宿主注入） */
+const THEMES = {
+  light: {
+    '--bg-base': '#FFFFFF', '--bg-surface': '#F7F7F8', '--bg-surface-2': '#F0F0F2', '--bg-surface-3': '#E5E5E8',
+    '--bg-input': '#FFFFFF', '--border-subtle': 'rgba(0,0,0,.05)', '--border-default': 'rgba(0,0,0,.10)',
+    '--border-strong': 'rgba(0,0,0,.16)',
+    '--text-primary': '#0F1115', '--text-secondary': '#57575C', '--text-tertiary': '#83838A', '--text-faint': '#90959C',
+    '--accent': '#4F46E5', '--accent-soft': 'rgba(79,70,229,.14)',
+    '--success': '#16A34A', '--warning': '#D97706', '--danger': '#DC2626',
+    '--radius-sm': '6px', '--radius-md': '10px', '--radius-lg': '14px',
+  },
+  dark: {
+    '--bg-base': '#1A1B1E', '--bg-surface': '#202123', '--bg-surface-2': '#26272B', '--bg-surface-3': '#323338',
+    '--bg-input': '#26272B', '--border-subtle': 'rgba(255,255,255,.06)', '--border-default': 'rgba(255,255,255,.12)',
+    '--border-strong': 'rgba(255,255,255,.18)',
+    '--text-primary': '#F1F3F5', '--text-secondary': '#B6B7BA', '--text-tertiary': '#8E9094', '--text-faint': '#6F7075',
+    '--accent': '#679EFE', '--accent-soft': 'rgba(103,158,254,.14)',
+    '--success': '#34D399', '--warning': '#FBBF24', '--danger': '#F87171',
+    '--radius-sm': '6px', '--radius-md': '10px', '--radius-lg': '14px',
+  },
+}
+
+let currentTheme = 'light'
+let sessionSeq = 0
+
+/* mock 数据（贴近真实长度与中文文案） */
+const KBS = [
+  { id: 'kb-1', name: '产品需求文档库', description: 'ArkWork 与 ArkRAG 的 PRD、评审记录', documentCount: 12, chunkCount: 486 },
+  { id: 'kb-2', name: 'API 接口文档', description: 'REST /api/v1 契约与错误码', documentCount: 8, chunkCount: 312 },
+  { id: 'kb-3', name: '会议纪要 2026', description: '', documentCount: 23, chunkCount: 1201 },
+]
+const DOCS = [
+  { id: 'd1', name: 'ArkWork-插件设计-v3.pdf', status: 'READY', chunkCount: 96, error: null },
+  { id: 'd2', name: '产品路线图 2026Q4.docx', status: 'EMBEDDING', chunkCount: 0, error: null },
+  { id: 'd3', name: '竞品分析笔记.pdf', status: 'FAILED', chunkCount: 0, error: '解析得到的文本为空（扫描件或纯图片 PDF？）' },
+  { id: 'd4', name: '周会纪要 0928.md', status: 'READY', chunkCount: 12, error: null },
+]
+const HITS = {
+  tookMs: 187,
+  hits: [
+    { kbId: 'kb-1', kbName: '产品需求文档库', docId: 'x', docName: '系统设计.md', chunkIndex: 11, score: 0.872,
+      text: 'embedding 模型通过 application.yml 的 arkrag.embedding 配置段设置，需提供 OpenAI 兼容端点的 baseURL、apiKey、model 名称与向量维度。配置后重启服务生效；更换模型后需重建索引，否则检索时报维度不一致错误。' },
+    { kbId: 'kb-1', kbName: '产品需求文档库', docId: 'y', docName: '快速开始.md', chunkIndex: 3, score: 0.814,
+      text: '在启动服务前，先在配置文件中填入 Embedding 模型信息。以 Ollama 为例：baseURL 填 http://127.0.0.1:11434/v1，model 填 bge-m3，维度 1024。' },
+    { kbId: 'kb-2', kbName: 'API 接口文档', docId: 'z', docName: 'FAQ.md', chunkIndex: 8, score: 0.776,
+      text: '检索时返回 EMBEDDING_DIMENSION_MISMATCH 说明你更换过 embedding 模型。此时应调用 POST /api/v1/kb/{id}/rebuild 重建索引。' },
+  ],
+}
+
+const HANDLERS = {
+  getConfig: () => ({ baseUrl: 'http://127.0.0.1:8964', token: 'mock-token-abcdefg' }),
+  saveConfig: (a) => (window.__savedConfig = a.config, null),
+  testConnection: () => ({ ok: true, version: '1.0.0', embeddingConfigured: true, embeddingModel: 'bge-m3', message: '连接成功' }),
+  listKbs: () => KBS,
+  listDocs: () => DOCS,
+  createKb: (a) => ({ id: 'kb-' + (KBS.length + 1), name: a.name, description: a.description || '', documentCount: 0, chunkCount: 0 }),
+  deleteKb: () => null,
+  uploadFiles: (a) => a.files.map((f, i) => ({ id: 'new' + i, name: f.name, status: 'PENDING', chunkCount: 0 })),
+  deleteDoc: () => null,
+  searchPreview: () => HITS,
+}
+
+window.addEventListener('message', (e) => {
+  const m = e.data
+  if (!m || typeof m !== 'object') return
+  if (m.kind === 'call' && m.method === 'host.call') {
+    // ArkWork 契约：host.call 的 params = { method: '<桥方法名>', params: <业务参数> }
+    const bridgeName = m.params && m.params.method
+    const inner = (m.params && m.params.params) || {}
+    const op = bridgeName === 'arkrag' ? inner.op : bridgeName
+    const args = inner.args || {}
+    const fn = HANDLERS[op]
+    const reply = (ok, payload) => e.source.postMessage({
+      kind: 'reply', id: m.id, ok,
+      ...(ok ? { result: payload } : { error: { message: payload } })
+    }, '*')
+    if (!fn) return reply(false, '未知操作：' + op)
+    Promise.resolve().then(fn.bind(null, args)).then(
+      (r) => reply(true, r), (err) => reply(false, String(err && err.message || err)))
+  }
+})
+
+function activate() {
+  sessionSeq++
+  document.getElementById('frame').contentWindow.postMessage({
+    kind: 'lifecycle', phase: 'activate', sessionId: 'sess-' + sessionSeq, theme: THEMES[currentTheme],
+  }, '*')
+}
+function setTheme(t) {
+  currentTheme = t
+  activate()
+}
+window.addEventListener('load', activate)
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArkRAG v1.0 · 原型总览</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg-base:#FFFFFF; --bg-surface:#F7F7F8; --bg-surface-2:#F0F0F2; --bg-surface-3:#E5E5E8;
+    --border-subtle:rgba(0,0,0,.05); --border-default:rgba(0,0,0,.10); --border-strong:rgba(0,0,0,.16);
+    --text-primary:#0F1115; --text-secondary:#57575C; --text-tertiary:#83838A; --text-faint:#90959C;
+    --accent:#4F46E5; --accent-soft:rgba(79,70,229,.14);
+    --success:#16A34A; --success-soft:rgba(22,163,74,.12);
+    --warning:#D97706; --warning-soft:rgba(217,119,6,.12);
+    --danger:#DC2626; --danger-soft:rgba(220,38,38,.10);
+    --info:#2563EB; --info-soft:rgba(37,99,235,.10);
+    --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+    --shadow-overlay:0 8px 24px rgba(0,0,0,.12);
+  }
+  [data-theme="dark"]{
+    color-scheme: dark;
+    --bg-base:#1A1B1E; --bg-surface:#202123; --bg-surface-2:#26272B; --bg-surface-3:#323338;
+    --border-subtle:rgba(255,255,255,.06); --border-default:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.18);
+    --text-primary:#F1F3F5; --text-secondary:#B6B7BA; --text-tertiary:#8E9094; --text-faint:#6F7075;
+    --accent:#679EFE; --accent-soft:rgba(103,158,254,.14);
+    --success:#34D399; --success-soft:rgba(52,211,153,.14);
+    --warning:#FBBF24; --warning-soft:rgba(251,191,36,.14);
+    --danger:#F87171; --danger-soft:rgba(248,113,113,.14);
+    --info:#60A5FA; --info-soft:rgba(96,165,250,.14);
+    --shadow-overlay:0 8px 24px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg-surface-2);color:var(--text-primary);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.6;padding:32px;max-width:960px;margin:0 auto}
+  h1{font-size:24px;margin-bottom:4px}
+  .sub{color:var(--text-tertiary);font-size:13px;margin-bottom:24px}
+  h2{font-size:16px;margin:28px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border-subtle)}
+  .card{background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:12px}
+  .swatches{display:flex;flex-wrap:wrap;gap:10px}
+  .sw{width:132px}
+  .sw .chip{height:44px;border-radius:var(--radius-md);border:1px solid var(--border-default)}
+  .sw .nm{font-size:12px;font-weight:600;margin-top:6px}
+  .sw .hx{font-size:11px;color:var(--text-faint)}
+  .fs-row{display:flex;align-items:baseline;gap:12px;margin:4px 0}
+  .fs-row .tag{font-size:11px;color:var(--text-faint);width:150px;flex:0 0 auto}
+  .sp-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .sp-bar{height:14px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:4px}
+  .radius-demo{display:inline-flex;gap:12px;align-items:center}
+  .rbox{width:56px;height:40px;background:var(--accent-soft);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+  th{color:var(--text-tertiary);font-weight:600;font-size:12px}
+  a.golink{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border-radius:var(--radius-md);
+    padding:9px 16px;font-size:13px;text-decoration:none;margin-right:8px}
+  [data-theme="dark"] a.golink{color:#0F1115;font-weight:600}
+  a.golink:hover{filter:brightness(1.08)}
+  .check li{margin:6px 0;color:var(--text-secondary)}
+  .theme-btn{position:fixed;top:16px;right:16px;background:var(--bg-base);border:1px solid var(--border-default);
+    border-radius:999px;padding:8px 14px;font-size:12px;color:var(--text-secondary);cursor:pointer;box-shadow:var(--shadow-overlay)}
+  code{background:var(--bg-surface-2);padding:1px 6px;border-radius:5px;font-size:12px}
+  .muted{color:var(--text-tertiary);font-size:12px}
+</style>
+</head>
+<body>
+<button class="theme-btn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'':'dark';this.textContent=document.documentElement.dataset.theme==='dark'?'☀ 切到浅色':'🌙 切到深色'">🌙 切到深色</button>
+
+<h1>ArkRAG v1.0 · 交互原型总览</h1>
+<div class="sub">Java RAG 服务（MCP + HTTP）× ArkWork 插件 ｜ 原型基准：03-interaction.md v1.0 ｜ 本期唯一 UI = ArkWork 插件面板（服务端无 UI，纯 API）</div>
+
+<h2>① 页面清单与导航</h2>
+<div class="card">
+  <table>
+    <tr><th>页面</th><th>说明</th><th>覆盖 PRD 功能</th><th>入口</th></tr>
+    <tr><td><b>P1 插件面板</b></td><td>ArkWork dock 面板：知识库 / 检索试用 / 连接设置 三 Tab，五态齐全</td><td>F11–F14</td><td><a href="page-01-panel.html">打开原型 →</a></td></tr>
+  </table>
+  <p style="margin-top:12px" class="muted">主流程串联：<b>连接设置（填地址+token→测试→保存）→ 知识库（新建→上传→摄入完成）→ 检索试用（提问→命中带分数与来源）</b>——请在面板原型里沿此路径点一遍。</p>
+  <p style="margin-top:8px"><a class="golink" href="page-01-panel.html">从第 1 步开始点 → 打开插件面板原型</a></p>
+</div>
+
+<h2>② 设计 Token 展示板</h2>
+<div class="card">
+  <p class="muted" style="margin-bottom:10px">命名与 ArkWork 插件主题契约（plugin-theme-tokens 白名单）一致，编码时由宿主注入、本表数值为回退值。用右上角按钮切换深浅色检查对比度。</p>
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#4F46E5"></div><div class="nm">--accent</div><div class="hx">浅 #4F46E5 / 深 #679EFE</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(79,70,229,.14)"></div><div class="nm">--accent-soft</div><div class="hx">主色软底</div></div>
+    <div class="sw"><div class="chip" style="background:#16A34A"></div><div class="nm">--success</div><div class="hx">浅 #16A34A / 深 #34D399</div></div>
+    <div class="sw"><div class="chip" style="background:#D97706"></div><div class="nm">--warning</div><div class="hx">浅 #D97706 / 深 #FBBF24</div></div>
+    <div class="sw"><div class="chip" style="background:#DC2626"></div><div class="nm">--danger</div><div class="hx">浅 #DC2626 / 深 #F87171</div></div>
+    <div class="sw"><div class="chip" style="background:#2563EB"></div><div class="nm">--info</div><div class="hx">浅 #2563EB / 深 #60A5FA</div></div>
+    <div class="sw"><div class="chip" style="background:#FFFFFF"></div><div class="nm">--bg-base</div><div class="hx">浅 #FFFFFF / 深 #1A1B1E</div></div>
+    <div class="sw"><div class="chip" style="background:#F7F7F8"></div><div class="nm">--bg-surface</div><div class="hx">浅 #F7F7F8 / 深 #202123</div></div>
+    <div class="sw"><div class="chip" style="background:#F0F0F2"></div><div class="nm">--bg-surface-2</div><div class="hx">浅 #F0F0F2 / 深 #26272B</div></div>
+  </div>
+  <h2 style="border:none;margin-top:20px">字号阶梯（桌面面板紧凑档）</h2>
+  <div class="fs-row"><span class="tag">--fs-aux 11px 辅助</span><span style="font-size:11px">12 个文档 · 486 块 · 2 小时前更新</span></div>
+  <div class="fs-row"><span class="tag">--fs-sub 12px 次正文</span><span style="font-size:12px">embedding 模型通过 application.yml 配置段设置…</span></div>
+  <div class="fs-row"><span class="tag">--fs-body 13px 正文</span><span style="font-size:13px">新建知识库 / 检索 / 保存配置</span></div>
+  <div class="fs-row"><span class="tag">--fs-h3 14px 小节标题</span><span style="font-size:14px;font-weight:600">摄入状态</span></div>
+  <div class="fs-row"><span class="tag">--fs-h1 18px 页面标题</span><span style="font-size:18px;font-weight:600">ArkRAG</span></div>
+  <h2 style="border:none;margin-top:20px">间距 / 圆角</h2>
+  <div class="sp-row"><div class="sp-bar" style="width:4px"></div><span class="muted">sp-1 = 4px</span></div>
+  <div class="sp-row"><div class="sp-bar" style="width:8px"></div><span class="muted">sp-2 = 8px</span></div>
+  <div class="sp-row"><div class="sp-bar" style="width:16px"></div><span class="muted">sp-3 = 12px</span></div>
+  <div class="sp-row"><div class="sp-bar" style="width:24px"></div><span class="muted">sp-4 = 16px</span></div>
+  <div class="sp-row"><div class="sp-bar" style="width:32px"></div><span class="muted">sp-6 = 24px</span></div>
+  <div class="radius-demo" style="margin-top:8px">
+    <div class="rbox" style="border-radius:6px">sm 6</div>
+    <div class="rbox" style="border-radius:10px">md 10</div>
+    <div class="rbox" style="border-radius:14px">lg 14</div>
+  </div>
+  <p class="muted" style="margin-top:8px">最小交互目标：按钮 ≥36px（桌面鼠标场景），列表行高 ≥44px，图标热区 ≥32px；语义色均配图标+文字双编码。</p>
+</div>
+
+<h2>③ 五态覆盖说明</h2>
+<div class="card">
+  <table>
+    <tr><th>状态</th><th>知识库 Tab</th><th>检索试用 Tab</th><th>连接设置 Tab</th></tr>
+    <tr><td>默认</td><td>KB 列表 + 摄入状态行</td><td>预填问题 + 3 条命中结果</td><td>地址/token 表单</td></tr>
+    <tr><td>加载</td><td>3 行骨架屏</td><td>按钮 loading + 骨架屏</td><td>骨架屏</td></tr>
+    <tr><td>空</td><td>无 KB 引导新建</td><td>无命中引导换问法</td><td>—（复用默认）</td></tr>
+    <tr><td>错误</td><td>服务不可达 + 去配置/重试</td><td>EMBEDDING_NOT_CONFIGURED</td><td>内联 401 错误条</td></tr>
+    <tr><td>成功</td><td colspan="3">toast（连接成功/已保存/已创建）——点状态切换器「成功」查看</td></tr>
+  </table>
+</div>
+
+<h2>④ 审查清单（请逐项过）</h2>
+<div class="card">
+  <ul class="check">
+    <li>☐ 总览页配色与字号（右上角切换深浅色各看一遍）</li>
+    <li>☐ 面板原型：五个状态逐个切换（右下角状态切换器），重点看错误态文案是否可行动</li>
+    <li>☐ 主流程从头点到尾：连接设置 → 测试连接 → 保存 → 新建知识库 → 上传 → 检索</li>
+    <li>☐ 删除知识库确认弹窗（KB 卡片「⋯」菜单）</li>
+    <li>☐ token 输入显隐切换、URL 校验红字</li>
+    <li>☐ 检索结果卡：分数徽标、来源行、长文本展开/收起</li>
+  </ul>
+  <p class="muted" style="margin-top:8px">注：原型为静态演示，上传/检索/测试连接均为模拟交互；未覆盖的动作会 toast 提示「原型未覆盖此功能」。</p>
+</div>
+
+<p class="muted" style="margin-top:24px">ArkRAG docs/v1.0/prototype · 2026-10-04</p>
+</body>
+</html>

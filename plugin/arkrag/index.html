@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ArkRAG</title>
+<style>
+  /* ★ 主题令牌契约：只使用宿主白名单令牌（plugin-theme-tokens），var() 内为回退值；
+     宿主经桥注入 :root，深浅色自动跟随。 */
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font: 13px/1.5 -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    color: var(--text-primary, #0F1115);
+    background: var(--bg-base, #FFFFFF);
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  /* 头部 */
+  .head { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px;
+    border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.05)); }
+  .head h1 { font-size: 14px; font-weight: 600; flex: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint, #90959C); flex: none; }
+  .dot.ok { background: var(--success, #16A34A); }
+  .dot.err { background: var(--danger, #DC2626); }
+  .head .conn { font-size: 11px; color: var(--text-tertiary, #83838A); margin-left: auto; }
+  /* Tab */
+  .tabs { flex: none; display: flex; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.05)); }
+  .tab { flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    color: var(--text-secondary, #57575C); border-bottom: 2px solid transparent; user-select: none; font-size: 13px; }
+  .tab:hover { background: var(--bg-surface, #F7F7F8); }
+  .tab.on { color: var(--accent, #4F46E5); border-bottom-color: var(--accent, #4F46E5); font-weight: 600; }
+  /* 内容 */
+  .content { flex: 1; overflow-y: auto; padding: 12px; }
+  .pane { display: none; } .pane.on { display: block; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary, #57575C); margin-bottom: 8px; }
+  .hint { font-size: 11px; color: var(--text-faint, #90959C); line-height: 1.5; }
+  /* 控件 */
+  button { font: inherit; height: 32px; padding: 0 12px; border-radius: var(--radius-md, 10px); cursor: pointer;
+    border: 1px solid var(--border-default, rgba(0,0,0,.1));
+    background: var(--bg-surface-2, #F0F0F2); color: inherit; }
+  button:hover { background: var(--bg-surface-3, #E5E5E8); }
+  button.primary { background: var(--accent, #4F46E5); border-color: var(--accent, #4F46E5); color: #fff; }
+  button.danger { color: var(--danger, #DC2626); border-color: var(--danger, #DC2626); background: transparent; }
+  button.mini { height: 24px; font-size: 11px; padding: 0 8px; border-radius: var(--radius-sm, 6px); }
+  button:disabled { opacity: .5; cursor: default; pointer-events: none; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row .flex1 { flex: 1; }
+  input { font: inherit; width: 100%; height: 32px; padding: 0 10px; color: var(--text-primary, #0F1115);
+    background: var(--bg-input, #FFFFFF); border: 1px solid var(--border-default, rgba(0,0,0,.1));
+    border-radius: var(--radius-md, 10px); outline: none; }
+  input:focus { border-color: var(--accent, #4F46E5); }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; color: var(--text-secondary, #57575C); margin-bottom: 4px; }
+  .field-err { display: none; font-size: 11px; color: var(--danger, #DC2626); margin-top: 4px; }
+  .field-err.show { display: block; }
+  /* KB 卡片 */
+  .kb-card { position: relative; border: 1px solid var(--border-default, rgba(0,0,0,.1));
+    border-radius: var(--radius-md, 10px); padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+    background: var(--bg-surface, #F7F7F8); }
+  .kb-card:hover { background: var(--bg-surface-2, #F0F0F2); }
+  .kb-card.sel { border-color: var(--accent, #4F46E5); box-shadow: 0 0 0 3px var(--accent-soft, rgba(79,70,229,.14)); }
+  .kb-name { font-weight: 600; display: flex; align-items: center; gap: 6px; padding-right: 28px; }
+  .kb-desc { font-size: 11px; color: var(--text-secondary, #57575C); margin-top: 2px; padding-right: 28px; }
+  .kb-meta { font-size: 11px; color: var(--text-faint, #90959C); margin-top: 4px; }
+  .kb-del { position: absolute; right: 8px; top: 8px; border: none; background: transparent;
+    color: var(--text-tertiary, #83838A); cursor: pointer; height: 26px; width: 26px;
+    display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm, 6px); }
+  .kb-del:hover { background: var(--bg-surface-3, #E5E5E8); color: var(--danger, #DC2626); }
+  /* 摄入状态行 */
+  .ing { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 6px;
+    border: 1px solid var(--border-subtle, rgba(0,0,0,.05)); border-radius: var(--radius-md, 10px);
+    font-size: 11px; background: var(--bg-surface, #F7F7F8); }
+  .ing .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-ok { color: var(--success, #16A34A); } .st-run { color: var(--info, #2563EB); } .st-fail { color: var(--danger, #DC2626); }
+  .st-fail .why { display: block; font-size: 10px; color: var(--text-faint, #90959C); }
+  /* 检索结果 */
+  .chipbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { font-size: 11px; padding: 3px 10px; border-radius: 999px; cursor: pointer; user-select: none;
+    border: 1px solid var(--border-default, rgba(0,0,0,.1)); color: var(--text-secondary, #57575C); }
+  .chip.on { background: var(--accent-soft, rgba(79,70,229,.14)); border-color: var(--accent, #4F46E5); color: var(--accent, #4F46E5); }
+  .hit { border: 1px solid var(--border-default, rgba(0,0,0,.1)); border-radius: var(--radius-md, 10px);
+    padding: 10px 12px; margin-bottom: 8px; background: var(--bg-surface, #F7F7F8); }
+  .hit-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .score { font-size: 10px; font-weight: 600; color: var(--accent, #4F46E5);
+    background: var(--accent-soft, rgba(79,70,229,.14)); border-radius: var(--radius-sm, 6px); padding: 1px 6px; }
+  .src { font-size: 11px; color: var(--text-tertiary, #83838A); }
+  .hit-text { font-size: 12px; color: var(--text-secondary, #57575C); line-height: 1.6; cursor: pointer;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hit-text.open { display: block; }
+  /* 状态块 */
+  .state { display: none; } .state.on { display: block; }
+  .center { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 28px 16px; }
+  .glyph { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 12px; font-size: 20px; background: var(--bg-surface-2, #F0F0F2); color: var(--text-tertiary, #83838A); }
+  .t1 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .t2 { font-size: 11px; color: var(--text-tertiary, #83838A); line-height: 1.6; margin-bottom: 14px; }
+  .errbox .glyph { background: var(--danger-soft, rgba(220,38,38,.1)); color: var(--danger, #DC2626); }
+  /* toast */
+  #toast { position: fixed; top: 52px; left: 50%; transform: translateX(-50%) translateY(-8px); opacity: 0;
+    background: var(--bg-overlay, #fff); color: var(--text-primary, #0F1115);
+    border: 1px solid var(--border-default, rgba(0,0,0,.1)); border-radius: var(--radius-md, 10px);
+    padding: 8px 14px; font-size: 12px; max-width: 86%; pointer-events: none; transition: all .25s; z-index: 99;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: var(--success, #16A34A); }
+  #toast.err { border-color: var(--danger, #DC2626); }
+  /* 确认弹窗 */
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
+    align-items: center; justify-content: center; z-index: 90; }
+  .mask.show { display: flex; }
+  .modal { width: 300px; background: var(--bg-overlay, #fff); border: 1px solid var(--border-default, rgba(0,0,0,.1));
+    border-radius: var(--radius-lg, 14px); padding: 16px; }
+  .modal h4 { font-size: 13px; margin-bottom: 8px; }
+  .modal p { font-size: 12px; color: var(--text-secondary, #57575C); line-height: 1.6; margin-bottom: 16px; }
+  .inline-ok { display: none; align-items: flex-start; gap: 6px; border: 1px solid var(--success, #16A34A);
+    background: var(--success-soft, rgba(22,163,74,.12)); color: var(--success, #16A34A);
+    border-radius: var(--radius-md, 10px); padding: 10px; font-size: 11px; line-height: 1.5; margin-top: 10px; }
+  .inline-ok.show { display: flex; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <span class="dot" id="connDot"></span>
+    <h1>ArkRAG</h1>
+    <span class="conn" id="connText">未连接</span>
+  </div>
+  <div class="tabs">
+    <div class="tab on" data-tab="kb">知识库</div>
+    <div class="tab" data-tab="search">检索试用</div>
+    <div class="tab" data-tab="conn">连接设置</div>
+  </div>
+  <div class="content">
+    <!-- 知识库 -->
+    <div class="pane on" id="pane-kb">
+      <div class="state" id="kb-default">
+        <div class="row" style="margin-bottom:10px">
+          <button class="primary flex1" id="btnNewKb" style="height:36px">＋ 新建知识库</button>
+          <button class="primary" id="btnUpload" style="height:36px">⬆ 上传文档</button>
+        </div>
+        <div id="kbForm" style="display:none; border:1px solid var(--border-default, rgba(0,0,0,.1)); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--bg-surface, #F7F7F8)">
+          <div class="field">
+            <label>名称（必填，≤64 字符）</label>
+            <input id="kbName" placeholder="例如：产品需求文档库">
+            <div class="field-err" id="kbNameErr">名称不能为空</div>
+          </div>
+          <div class="field">
+            <label>描述（选填）</label>
+            <input id="kbDesc" placeholder="这个知识库用来放什么内容">
+          </div>
+          <div class="row">
+            <button class="primary mini" id="btnCreateKb">创建</button>
+            <button class="mini" id="btnCancelKb">取消</button>
+          </div>
+        </div>
+        <div id="kbList"></div>
+        <div class="section-title" style="margin-top:14px">摄入状态</div>
+        <div id="ingestList"><div class="hint">暂无摄入任务</div></div>
+        <input type="file" id="fileInput" multiple style="display:none"
+               accept=".pdf,.docx,.pptx,.html,.txt,.md">
+        <div class="hint" style="margin-top:10px">支持 PDF / DOCX / PPTX / HTML / TXT / MD；面板上传建议 ≤20MB（更大的文件可用 HTTP API 上传）。上传同名文档=覆盖旧版本。</div>
+      </div>
+      <div class="state" id="kb-empty">
+        <div class="center">
+          <div class="glyph">📚</div>
+          <div class="t1">还没有知识库</div>
+          <div class="t2">创建一个知识库并上传文档<br>即可让 Agent 做语义检索</div>
+          <button class="primary" id="btnEmptyNew">＋ 新建知识库</button>
+        </div>
+      </div>
+      <div class="state" id="kb-error">
+        <div class="center errbox">
+          <div class="glyph">⚠</div>
+          <div class="t1" id="kbErrTitle">无法连接 ArkRAG 服务</div>
+          <div class="t2" id="kbErrMsg">服务未启动或地址错误</div>
+          <div class="row">
+            <button id="btnGoConn">去配置</button>
+            <button class="primary" id="btnKbRetry">重试</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 检索试用 -->
+    <div class="pane" id="pane-search">
+      <div class="state" id="search-default">
+        <div class="chipbar" id="kbChips"></div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="query" class="flex1" placeholder="输入问题，回车检索…" style="height:36px">
+          <button class="primary" id="btnSearch" style="height:36px">检索</button>
+        </div>
+        <div class="hint" id="searchMeta" style="margin-bottom:8px"></div>
+        <div id="hits"></div>
+      </div>
+      <div class="state" id="search-empty">
+        <div class="center">
+          <div class="glyph">🔍</div>
+          <div class="t1">没有命中内容</div>
+          <div class="t2">试试换一种问法，或检查知识库里<br>是否已上传相关文档</div>
+        </div>
+      </div>
+      <div class="state" id="search-error">
+        <div class="center errbox">
+          <div class="glyph">⚠</div>
+          <div class="t1">检索失败</div>
+          <div class="t2" id="searchErrMsg"></div>
+          <button class="primary" id="btnSearchRetry">重试</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 连接设置 -->
+    <div class="pane" id="pane-conn">
+      <div class="section-title">服务连接</div>
+      <div class="field">
+        <label>服务地址</label>
+        <input id="baseUrl" placeholder="http://127.0.0.1:8964">
+        <div class="field-err" id="urlErr">请输入 http/https 开头的合法地址</div>
+      </div>
+      <div class="field">
+        <label>API Token</label>
+        <input id="token" type="password" placeholder="arkrag-server 的 arkrag.server.token">
+        <div class="hint" style="margin-top:4px">保存在本插件私有存储，仅随请求发送给服务</div>
+      </div>
+      <div class="inline-ok" id="connOk"></div>
+      <div class="row" style="margin-top:14px">
+        <button id="btnTest">测试连接</button>
+        <button class="primary flex1" id="btnSave">保存</button>
+      </div>
+      <div class="hint" style="margin-top:14px">
+        尚未安装服务？在终端运行 <b>java -jar arkrag-server.jar</b> 启动（默认端口 8964），
+        token 与 embedding 模型见服务端 application.yml。Agent 侧的 MCP stdio 接入见服务包 README。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div class="mask" id="delMask">
+    <div class="modal">
+      <h4>删除知识库？</h4>
+      <p id="delText">将删除该知识库中的全部文档与向量数据，不可恢复。</p>
+      <div class="row" style="justify-content:flex-end">
+        <button id="btnDelCancel">取消</button>
+        <button class="danger" id="btnDelOk">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- 桥客户端（与宿主脚手架同一报文契约） ---------- */
+var pending = {}
+var seq = 1
+var sessionId = null
+
+function call(op, args) {
+  if (!sessionId) return Promise.reject(new Error('宿主尚未完成握手'))
+  var id = seq++
+  return new Promise(function (resolve, reject) {
+    pending[id] = { resolve: resolve, reject: reject }
+    parent.postMessage({ kind: 'call', id: id, method: 'host.call',
+      params: { method: 'arkrag', params: { op: op, args: args || {} } } }, '*')
+  })
+}
+
+function applyTheme(tokens) {
+  if (!tokens) return
+  var root = document.documentElement
+  for (var k in tokens) root.style.setProperty(k, tokens[k])
+}
+
+window.addEventListener('message', function (e) {
+  var m = e.data
+  if (!m || typeof m !== 'object') return
+  if (m.kind === 'lifecycle' && m.phase === 'activate') {
+    sessionId = m.sessionId
+    applyTheme(m.theme)
+    void call('ui.ready', { name: 'ArkRAG' })
+    boot()
+    return
+  }
+  if (m.kind === 'reply') {
+    var p = pending[m.id]
+    if (!p) return
+    delete pending[m.id]
+    if (m.ok) p.resolve(m.result)
+    else p.reject(new Error((m.error && m.error.message) || '调用失败'))
+  }
+})
+
+/* ---------- UI 基础 ---------- */
+var $ = function (id) { return document.getElementById(id) }
+var toastTimer = null
+function toast(msg, type) {
+  var t = $('toast')
+  t.className = 'show ' + (type || '')
+  t.textContent = msg
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(function () { t.className = '' }, 2500)
+}
+function setState(prefix, s) {
+  var pane = $('pane-' + prefix)
+  if (!pane) return
+  var blocks = pane.querySelectorAll('.state')
+  for (var i = 0; i < blocks.length; i++) {
+    blocks[i].classList.toggle('on', blocks[i].id === prefix + '-' + s)
+  }
+}
+document.querySelectorAll('.tab').forEach(function (t) {
+  t.addEventListener('click', function () {
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('on') })
+    t.classList.add('on')
+    document.querySelectorAll('.pane').forEach(function (p) { p.classList.remove('on') })
+    $('pane-' + t.dataset.tab).classList.add('on')
+    if (t.dataset.tab === 'kb') refreshKbs()
+    if (t.dataset.tab === 'search') renderChips()
+  })
+})
+
+/* ---------- 全局状态 ---------- */
+var kbs = []
+var selectedKbId = null
+var searchSel = {}   // kbId -> bool（检索试用多选）
+var ingestTimer = null
+
+function showConn(ok, text) {
+  $('connDot').className = 'dot' + (ok === true ? ' ok' : ok === false ? ' err' : '')
+  $('connText').textContent = text
+}
+
+/* ---------- 启动 ---------- */
+async function boot() {
+  try {
+    var cfg = await call('getConfig', {})
+    $('baseUrl').value = cfg.baseUrl || 'http://127.0.0.1:8964'
+    $('token').value = cfg.token || ''
+  } catch (e) { /* 配置读失败不阻塞，用默认值 */ }
+  refreshKbs()
+}
+
+/* ---------- 知识库 ---------- */
+async function refreshKbs() {
+  setState('kb', 'default')
+  $('kbList').innerHTML = ''
+  try {
+    kbs = await call('listKbs', {})
+    showConn(true, '已连接 · 知识库 ' + kbs.length)
+  } catch (e) {
+    showConn(false, '不可达')
+    $('kbErrTitle').textContent = '无法连接 ArkRAG 服务'
+    $('kbErrMsg').textContent = (e && e.message) || '服务未启动或地址错误'
+    setState('kb', 'error')
+    return
+  }
+  if (!kbs.length) { setState('kb', 'empty'); return }
+  if (!selectedKbId || !kbs.some(function (k) { return k.id === selectedKbId })) {
+    selectedKbId = kbs[0].id
+  }
+  renderKbs()
+  pollIngest()
+}
+
+function renderKbs() {
+  var html = ''
+  kbs.forEach(function (k) {
+    var sel = k.id === selectedKbId
+    html += '<div class="kb-card' + (sel ? ' sel' : '') + '" data-id="' + k.id + '">'
+      + '<div class="kb-name">' + esc(k.name) + '</div>'
+      + (k.description ? '<div class="kb-desc">' + esc(k.description) + '</div>' : '')
+      + '<div class="kb-meta">文档 ' + (k.documentCount || 0) + ' · 块 ' + (k.chunkCount || 0) + '</div>'
+      + '<button class="kb-del" data-del="' + k.id + '" title="删除">🗑</button>'
+      + '</div>'
+  })
+  $('kbList').innerHTML = html
+  $('kbList').querySelectorAll('.kb-card').forEach(function (card) {
+    card.addEventListener('click', function (ev) {
+      if (ev.target.dataset && ev.target.dataset.del) return
+      selectedKbId = card.dataset.id
+      renderKbs()
+    })
+  })
+  $('kbList').querySelectorAll('[data-del]').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation()
+      var kb = kbs.find(function (k) { return k.id === btn.dataset.del })
+      $('delText').innerHTML = '将删除「<b>' + esc(kb.name) + '</b>」中的全部文档与向量数据，<b style="color:var(--danger,#DC2626)">不可恢复</b>。'
+      $('delMask').classList.add('show')
+      $('btnDelOk').onclick = async function () {
+        $('delMask').classList.remove('show')
+        try {
+          await call('deleteKb', { kbId: kb.id })
+          if (selectedKbId === kb.id) selectedKbId = null
+          toast('知识库已删除', 'ok')
+          refreshKbs()
+        } catch (e) { toast(e.message, 'err') }
+      }
+    })
+  })
+}
+
+async function createKb() {
+  var name = $('kbName').value.trim()
+  if (!name) { $('kbNameErr').classList.add('show'); return }
+  $('kbNameErr').classList.remove('show')
+  try {
+    var kb = await call('createKb', { name: name, description: $('kbDesc').value.trim() })
+    $('kbForm').style.display = 'none'
+    $('kbName').value = ''; $('kbDesc').value = ''
+    selectedKbId = kb.id
+    toast('知识库「' + kb.name + '」已创建', 'ok')
+    refreshKbs()
+  } catch (e) { toast(e.message, 'err') }
+}
+
+/* ---------- 上传与摄入状态 ---------- */
+$('btnUpload').addEventListener('click', function () {
+  if (!selectedKbId) { toast('请先选择一个知识库', 'err'); return }
+  $('fileInput').click()
+})
+$('fileInput').addEventListener('change', async function () {
+  var files = Array.prototype.slice.call(this.files || [])
+  this.value = ''
+  if (!files.length) return
+  var payloads = []
+  for (var i = 0; i < files.length; i++) {
+    if (files[i].size > 20 * 1024 * 1024) {
+      toast('「' + files[i].name + '」超过 20MB，请改用 HTTP API 上传', 'err')
+      continue
+    }
+    var b64 = await new Promise(function (resolve, reject) {
+      var r = new FileReader()
+      r.onload = function () { resolve(String(r.result)) }
+      r.onerror = function () { reject(new Error('读取文件失败')) }
+      r.readAsDataURL(files[i])
+    })
+    payloads.push({ name: files[i].name, base64: b64 })
+  }
+  if (!payloads.length) return
+  showIngestPending(payloads)
+  try {
+    await call('uploadFiles', { kbId: selectedKbId, files: payloads })
+    toast('已提交 ' + payloads.length + ' 个文档', 'ok')
+    pollIngest()
+  } catch (e) {
+    toast(e.message, 'err')
+  }
+})
+
+function showIngestPending(files) {
+  var box = $('ingestList')
+  if (box.querySelector('.hint')) box.innerHTML = ''
+  files.forEach(function (f) {
+    var div = document.createElement('div')
+    div.className = 'ing'
+    div.dataset.name = f.name
+    div.innerHTML = '<span class="name">' + esc(f.name) + '</span><span class="st-run">排队中…</span>'
+    box.prepend(div)
+  })
+}
+
+async function pollIngest() {
+  clearTimeout(ingestTimer)
+  if (!selectedKbId) return
+  try {
+    var docs = await call('listDocs', { kbId: selectedKbId })
+    renderIngest(docs)
+    var busy = docs.some(function (d) {
+      return d.status === 'PENDING' || d.status === 'PARSING' || d.status === 'EMBEDDING'
+    })
+    if (busy) ingestTimer = setTimeout(pollIngest, 2000)
+    else refreshCounts()
+  } catch (e) { /* 轮询失败静默，下一轮再试 */ }
+}
+
+function renderIngest(docs) {
+  var box = $('ingestList')
+  var recent = docs.filter(function (d) { return d.status !== 'READY' })
+    .concat(docs.filter(function (d) { return d.status === 'READY' }).slice(0, 5))
+  if (!recent.length) { box.innerHTML = '<div class="hint">暂无摄入任务</div>'; return }
+  box.innerHTML = recent.map(function (d) {
+    var st, cls
+    if (d.status === 'READY') { st = '完成 · ' + d.chunkCount + ' 块'; cls = 'st-ok' }
+    else if (d.status === 'FAILED') { st = '失败'; cls = 'st-fail' }
+    else if (d.status === 'PARSING') { st = '解析中…'; cls = 'st-run' }
+    else if (d.status === 'EMBEDDING') { st = '向量化中…'; cls = 'st-run' }
+    else { st = '排队中…'; cls = 'st-run' }
+    var why = d.status === 'FAILED' && d.error ? '<span class="why">' + esc(d.error) + '</span>' : ''
+    return '<div class="ing"><span class="name">' + esc(d.name) + '</span>'
+      + '<span class="' + cls + '">' + st + why + '</span></div>'
+  }).join('')
+}
+
+async function refreshCounts() {
+  try {
+    var fresh = await call('listKbs', {})
+    var changed = JSON.stringify(fresh) !== JSON.stringify(kbs)
+    kbs = fresh
+    if (changed) { renderKbs(); renderChips() }
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ---------- 检索试用 ---------- */
+function renderChips() {
+  var bar = $('kbChips')
+  if (!kbs.length) { bar.innerHTML = '<span class="hint">暂无知识库</span>'; return }
+  kbs.forEach(function (k) { if (!(k.id in searchSel)) searchSel[k.id] = true })
+  bar.innerHTML = kbs.map(function (k) {
+    return '<span class="chip' + (searchSel[k.id] ? ' on' : '') + '" data-id="' + k.id + '">'
+      + esc(k.name) + '</span>'
+  }).join('')
+  bar.querySelectorAll('.chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      searchSel[c.dataset.id] = !searchSel[c.dataset.id]
+      c.classList.toggle('on')
+    })
+  })
+}
+
+async function doSearch() {
+  var q = $('query').value.trim()
+  if (!q) { toast('请输入检索问题', 'err'); return }
+  var selIds = Object.keys(searchSel).filter(function (k) { return searchSel[k] })
+  try {
+    var out = await call('searchPreview', { query: q, kbIds: selIds, topK: 5 })
+    var hits = out.hits || []
+    $('searchMeta').textContent = '命中 ' + hits.length + ' 条 · 用时 ' + out.tookMs + 'ms'
+    if (!hits.length) { setState('search', 'empty'); return }
+    $('hits').innerHTML = hits.map(function (h) {
+      return '<div class="hit"><div class="hit-top"><span class="score">' + h.score.toFixed(3) + '</span>'
+        + '<span class="src">' + esc(h.docName) + ' · 第 ' + (h.chunkIndex + 1) + ' 块 · ' + esc(h.kbName) + '</span></div>'
+        + '<div class="hit-text">' + esc(h.text) + '</div></div>'
+    }).join('')
+    $('hits').querySelectorAll('.hit-text').forEach(function (el) {
+      el.addEventListener('click', function () { el.classList.toggle('open') })
+    })
+    setState('search', 'default')
+  } catch (e) {
+    $('searchErrMsg').textContent = (e && e.message) || '未知错误'
+    setState('search', 'error')
+  }
+}
+
+/* ---------- 连接设置 ---------- */
+async function testConn() {
+  var url = $('baseUrl').value.trim()
+  if (!/^https?:\/\//.test(url)) { $('urlErr').classList.add('show'); return }
+  $('urlErr').classList.remove('show')
+  var btn = $('btnTest')
+  btn.disabled = true; btn.textContent = '测试中…'
+  try {
+    await call('saveConfig', { config: { baseUrl: url, token: $('token').value } })
+    var r = await call('testConnection', {})
+    var okBox = $('connOk')
+    if (r.ok) {
+      okBox.innerHTML = '✓ 连接成功 · ArkRAG v' + esc(r.version || '?')
+        + (r.embeddingConfigured ? ' · Embedding 已配置（' + esc(r.embeddingModel || '') + '）'
+          : ' · <b>Embedding 未配置</b>：摄入/检索将失败，请在服务端 application.yml 配置后重启')
+      okBox.classList.add('show')
+      showConn(true, '已连接')
+      refreshKbs()
+    } else {
+      okBox.classList.remove('show')
+      showConn(r.message.indexOf('401') >= 0 ? false : false, r.message.indexOf('401') >= 0 ? 'token 无效' : '不可达')
+      toast(r.message, 'err')
+    }
+  } catch (e) { toast(e.message, 'err') }
+  btn.disabled = false; btn.textContent = '测试连接'
+}
+
+async function saveConn() {
+  var url = $('baseUrl').value.trim()
+  if (!/^https?:\/\//.test(url)) { $('urlErr').classList.add('show'); return }
+  $('urlErr').classList.remove('show')
+  try {
+    await call('saveConfig', { config: { baseUrl: url, token: $('token').value } })
+    toast('配置已保存', 'ok')
+    refreshKbs()
+  } catch (e) { toast(e.message, 'err') }
+}
+
+/* ---------- 事件绑定 ---------- */
+$('btnNewKb').addEventListener('click', function () { $('kbForm').style.display = 'block'; $('kbName').focus() })
+$('btnEmptyNew').addEventListener('click', function () { setState('kb', 'default'); $('kbForm').style.display = 'block'; $('kbName').focus() })
+$('btnCancelKb').addEventListener('click', function () { $('kbForm').style.display = 'none' })
+$('btnCreateKb').addEventListener('click', createKb)
+$('btnKbRetry').addEventListener('click', refreshKbs)
+$('btnGoConn').addEventListener('click', function () { document.querySelector('[data-tab="conn"]').click() })
+$('btnSearch').addEventListener('click', doSearch)
+$('query').addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch() })
+$('btnSearchRetry').addEventListener('click', doSearch)
+$('btnTest').addEventListener('click', testConn)
+$('btnSave').addEventListener('click', saveConn)
+$('baseUrl').addEventListener('blur', function () {
+  $('urlErr').classList.toggle('show', !/^https?:\/\//.test(this.value.trim()))
+})
+$('btnDelCancel').addEventListener('click', function () { $('delMask').classList.remove('show') })
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  })
+}
+</script>
+</body>
+</html>

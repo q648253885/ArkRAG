@@ -1,0 +1,7 @@
+{
+  "name": "arkrag-plugin",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "private": true,
+  "description": "ArkRAG 知识检索 — ArkWork 能力插件（Host 半 main.js + Client 半 index.html）"
+}
