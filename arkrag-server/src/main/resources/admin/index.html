@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArkRAG Console</title>
+<style>
+  /* 设计 token 与插件面板同一契约（docs/v1.0/03-interaction.md §0）；本地页面无宿主注入，
+     默认跟随系统深浅色，右上角可手动切换。 */
+  :root{
+    color-scheme: light dark;
+    --bg-base:#FFFFFF; --bg-surface:#F7F7F8; --bg-surface-2:#F0F0F2; --bg-surface-3:#E5E5E8;
+    --bg-input:#FFFFFF;
+    --border-subtle:rgba(0,0,0,.05); --border-default:rgba(0,0,0,.10); --border-strong:rgba(0,0,0,.16);
+    --text-primary:#0F1115; --text-secondary:#57575C; --text-tertiary:#83838A; --text-faint:#90959C;
+    --accent:#4F46E5; --accent-soft:rgba(79,70,229,.14);
+    --success:#16A34A; --success-soft:rgba(22,163,74,.12);
+    --warning:#D97706; --warning-soft:rgba(217,119,6,.12);
+    --danger:#DC2626; --danger-soft:rgba(220,38,38,.10);
+    --info:#2563EB; --info-soft:rgba(37,99,235,.10);
+    --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-mode="light"]){
+    --bg-base:#1A1B1E; --bg-surface:#202123; --bg-surface-2:#26272B; --bg-surface-3:#323338;
+    --bg-input:#26272B;
+    --border-subtle:rgba(255,255,255,.06); --border-default:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.18);
+    --text-primary:#F1F3F5; --text-secondary:#B6B7BA; --text-tertiary:#8E9094; --text-faint:#6F7075;
+    --accent:#679EFE; --accent-soft:rgba(103,158,254,.14);
+    --success:#34D399; --success-soft:rgba(52,211,153,.14);
+    --warning:#FBBF24; --warning-soft:rgba(251,191,36,.14);
+    --danger:#F87171; --danger-soft:rgba(248,113,113,.14);
+    --info:#60A5FA; --info-soft:rgba(96,165,250,.14);
+  }}
+  :root[data-mode="dark"]{
+    --bg-base:#1A1B1E; --bg-surface:#202123; --bg-surface-2:#26272B; --bg-surface-3:#323338;
+    --bg-input:#26272B;
+    --border-subtle:rgba(255,255,255,.06); --border-default:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.18);
+    --text-primary:#F1F3F5; --text-secondary:#B6B7BA; --text-tertiary:#8E9094; --text-faint:#6F7075;
+    --accent:#679EFE; --accent-soft:rgba(103,158,254,.14);
+    --success:#34D399; --success-soft:rgba(52,211,153,.14);
+    --warning:#FBBF24; --warning-soft:rgba(251,191,36,.14);
+    --danger:#F87171; --danger-soft:rgba(248,113,113,.14);
+    --info:#60A5FA; --info-soft:rgba(96,165,250,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font:13px/1.6 -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    color:var(--text-primary);background:var(--bg-surface-2);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .head{flex:none;height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;
+    background:var(--bg-base);border-bottom:1px solid var(--border-default)}
+  .head h1{font-size:16px;font-weight:600}
+  .head .dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint)}
+  .head .dot.ok{background:var(--success)} .head .dot.err{background:var(--danger)}
+  .head .conn{font-size:11px;color:var(--text-tertiary)}
+  .head .sp{flex:1}
+  button{font:inherit;height:32px;padding:0 14px;border-radius:var(--radius-md);cursor:pointer;
+    border:1px solid var(--border-default);background:var(--bg-surface-2);color:inherit}
+  button:hover{background:var(--bg-surface-3)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.mini{height:26px;font-size:11px;padding:0 10px;border-radius:var(--radius-sm)}
+  button.danger{color:var(--danger);border-color:var(--danger);background:transparent}
+  button:disabled{opacity:.5;cursor:default;pointer-events:none}
+  input,select{font:inherit;height:32px;padding:0 10px;color:var(--text-primary);background:var(--bg-input);
+    border:1px solid var(--border-default);border-radius:var(--radius-md);outline:none}
+  input:focus{border-color:var(--accent)}
+  .layout{flex:1;display:flex;min-height:0}
+  .nav{flex:none;width:168px;background:var(--bg-base);border-right:1px solid var(--border-default);
+    padding:12px 8px;display:flex;flex-direction:column;gap:4px}
+  .nav button{border:none;background:transparent;text-align:left;height:36px;border-radius:var(--radius-md);
+    color:var(--text-secondary);padding:0 14px}
+  .nav button:hover{background:var(--bg-surface-2)}
+  .nav button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .main{flex:1;overflow-y:auto;padding:20px 24px;min-width:0}
+  .pane{display:none;max-width:980px}.pane.on{display:block}
+  .section-title{font-size:14px;font-weight:600;margin-bottom:4px}
+  .hint{font-size:11px;color:var(--text-faint);line-height:1.6}
+  .card{background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-lg);
+    padding:16px 18px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+  th{color:var(--text-tertiary);font-weight:600;font-size:11px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;color:var(--text-secondary);margin-bottom:4px}
+  .field input{width:100%}
+  .row{display:flex;gap:10px;align-items:center}
+  .row .flex1{flex:1}
+  .badge{font-size:10px;padding:1px 8px;border-radius:999px;border:1px solid var(--border-default);
+    color:var(--text-secondary)}
+  .badge.ok{color:var(--success);border-color:var(--success);background:var(--success-soft)}
+  .badge.err{color:var(--danger);border-color:var(--danger);background:var(--danger-soft)}
+  .badge.warn{color:var(--warning);border-color:var(--warning);background:var(--warning-soft)}
+  .st-run{color:var(--info)} .st-ok{color:var(--success)} .st-fail{color:var(--danger)}
+  .toast{position:fixed;top:64px;left:50%;transform:translateX(-50%) translateY(-8px);opacity:0;
+    background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-md);
+    padding:9px 16px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);transition:all .25s;
+    pointer-events:none;z-index:99;max-width:70%}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-color:var(--success)} .toast.err{border-color:var(--danger)}
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:90}
+  .mask.show{display:flex}
+  .modal{width:360px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px}
+  .modal h4{font-size:13px;margin-bottom:8px}
+  .modal p{font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px}
+  .warnbar{display:none;border:1px solid var(--warning);background:var(--warning-soft);color:var(--warning);
+    border-radius:var(--radius-md);padding:10px 14px;font-size:11px;line-height:1.6;margin-bottom:14px}
+  .warnbar.show{display:block}
+  .empty{padding:26px;text-align:center;color:var(--text-tertiary);font-size:12px}
+  .answer{font-size:13px;line-height:1.8;white-space:pre-wrap}
+  .answer b{color:var(--accent)}
+  .cite{font-size:11px;color:var(--text-secondary)}
+  .tokenbar{display:none;margin-bottom:14px}
+  .tokenbar.show{display:block}
+  .skeleton{height:52px;border-radius:var(--radius-md);margin-bottom:8px;
+    background:linear-gradient(90deg,var(--bg-surface-2) 25%,var(--bg-surface-3) 50%,var(--bg-surface-2) 75%);
+    background-size:200% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="head">
+  <span class="dot" id="connDot"></span>
+  <h1>ArkRAG Console</h1>
+  <span class="conn" id="connText"></span>
+  <span class="sp"></span>
+  <button class="mini" id="btnTheme">🌗 主题</button>
+  <button class="mini" id="btnReToken">Token</button>
+</div>
+<div class="layout">
+  <div class="nav">
+    <button data-pane="kb" class="on">📚 知识库</button>
+    <button data-pane="search">🔍 检索试用</button>
+    <button data-pane="ask">💬 问答试用</button>
+    <button data-pane="model">🧠 模型配置</button>
+  </div>
+  <div class="main">
+
+    <!-- token 输入条（401 / 首次） -->
+    <div class="card tokenbar" id="tokenBar">
+      <div class="section-title">访问令牌</div>
+      <div class="hint" style="margin-bottom:8px">数据接口需要 Bearer token（服务端 <code>arkrag.server.token</code>）。将保存在浏览器 localStorage。</div>
+      <div class="row">
+        <input type="password" id="tokenInput" class="flex1" placeholder="粘贴 token…">
+        <button class="primary" id="btnTokenSave">验证并保存</button>
+      </div>
+      <div class="hint" id="tokenErr" style="color:var(--danger);margin-top:6px;display:none"></div>
+    </div>
+
+    <!-- 知识库 -->
+    <div class="pane on" id="pane-kb">
+      <div class="warnbar" id="embWarn">⚠ 已更换 Embedding 模型或维度：既有知识库的向量与新查询不可混用，请在下方对相关知识库执行「重建索引」。</div>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <div class="section-title flex1">知识库</div>
+          <button class="primary mini" id="btnNewKb">＋ 新建知识库</button>
+        </div>
+        <div id="kbForm" style="display:none;margin-bottom:10px">
+          <div class="row">
+            <input id="kbName" class="flex1" placeholder="名称（必填，≤64 字符）">
+            <input id="kbDesc" class="flex1" placeholder="描述（选填）">
+            <button class="primary mini" id="btnCreateKb">创建</button>
+            <button class="mini" id="btnCancelKb">取消</button>
+          </div>
+        </div>
+        <div id="kbTable"><div class="skeleton"></div><div class="skeleton"></div></div>
+      </div>
+      <div class="card" id="docCard" style="display:none">
+        <div class="row" style="margin-bottom:10px">
+          <div class="section-title flex1">文档：<span id="docKbName"></span></div>
+          <button class="primary mini" id="btnUpload">⬆ 上传文档</button>
+          <button class="mini" id="btnRebuild">↻ 重建索引</button>
+          <input type="file" id="fileInput" multiple style="display:none" accept=".pdf,.docx,.pptx,.html,.txt,.md">
+        </div>
+        <div id="docTable"></div>
+        <div class="hint" style="margin-top:8px">支持 PDF / DOCX / PPTX / HTML / TXT / MD，单文件 ≤50MB；同名文档重复上传 = 覆盖旧版本。</div>
+      </div>
+    </div>
+
+    <!-- 检索试用 -->
+    <div class="pane" id="pane-search">
+      <div class="card">
+        <div class="section-title">语义检索</div>
+        <div class="hint" style="margin-bottom:10px">返回最相关的文本块与出处（相似度降序）。</div>
+        <div class="row" style="margin-bottom:10px">
+          <input id="searchQuery" class="flex1" placeholder="输入检索问题，回车执行…" style="height:36px">
+          <select id="searchKb" style="height:36px;min-width:160px"><option value="">全部知识库</option></select>
+          <button class="primary" id="btnSearch" style="height:36px">检索</button>
+        </div>
+        <div class="hint" id="searchMeta" style="margin-bottom:10px"></div>
+        <div id="searchHits"></div>
+      </div>
+    </div>
+
+    <!-- 问答试用 -->
+    <div class="pane" id="pane-ask">
+      <div class="card">
+        <div class="section-title">知识库问答（RAG）</div>
+        <div class="hint" style="margin-bottom:10px">检索 topK → Chat 模型生成带 [n] 引用的答案。需先在「模型配置」启用 Chat。</div>
+        <div class="row" style="margin-bottom:10px">
+          <input id="askQuery" class="flex1" placeholder="输入问题，回车提问…" style="height:36px">
+          <select id="askKb" style="height:36px;min-width:160px"><option value="">全部知识库</option></select>
+          <button class="primary" id="btnAsk" style="height:36px">提问</button>
+        </div>
+        <div id="askOut"><div class="empty">答案将显示在这里</div></div>
+      </div>
+    </div>
+
+    <!-- 模型配置 -->
+    <div class="pane" id="pane-model">
+      <div class="card">
+        <div class="section-title">Embedding 模型 <span class="badge" id="embSource"></span></div>
+        <div class="hint" style="margin-bottom:12px">OpenAI 兼容 /v1/embeddings 端点（DeepSeek / 通义 / Ollama / vLLM 均可）。更换模型/维度后，既有知识库需重建索引。</div>
+        <div class="row">
+          <div class="field flex1"><label>Base URL</label><input id="embUrl" placeholder="http://127.0.0.1:11434/v1"></div>
+          <div class="field" style="width:180px"><label>API Key</label><input id="embKey" placeholder="sk-…（Ollama 任填）"></div>
+        </div>
+        <div class="row">
+          <div class="field flex1"><label>Model</label><input id="embModel" placeholder="bge-m3 / text-embedding-v3 …"></div>
+          <div class="field" style="width:140px"><label>维度（可选）</label><input id="embDims" placeholder="1024"></div>
+        </div>
+        <div class="row">
+          <button class="mini" id="btnEmbTest">测试连通</button>
+          <span class="hint" id="embTestOut"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Chat 模型（独立问答用）<span class="badge" id="chatSource"></span></div>
+        <div class="hint" style="margin-bottom:12px">OpenAI 兼容 /chat/completions 端点。配置后「问答试用」与 rag_ask 工具即可生成带引用的答案。</div>
+        <div class="row">
+          <div class="field flex1"><label>Base URL</label><input id="chatUrl" placeholder="https://api.deepseek.com/v1"></div>
+          <div class="field" style="width:180px"><label>API Key</label><input id="chatKey" placeholder="sk-…"></div>
+        </div>
+        <div class="row">
+          <div class="field flex1"><label>Model</label><input id="chatModel" placeholder="deepseek-chat / qwen-plus …"></div>
+          <div class="field" style="width:140px"><label>Temperature</label><input id="chatTemp" placeholder="0.3"></div>
+        </div>
+        <div class="row">
+          <button class="mini" id="btnChatTest">测试连通</button>
+          <span class="hint" id="chatTestOut"></span>
+        </div>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="primary" id="btnSaveModel" style="height:36px;padding:0 24px">保存配置（热生效）</button>
+      </div>
+      <div class="hint" style="margin-top:8px">保存即写入 {dataDir}/settings.json 并立即生效，无需重启；API Key 明文存于本机数据目录（local-first 口径，与 ArkWork models.json 同级）。清空某组并保存 = 回落 application.yml 初始值。</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="mask" id="confirmMask">
+  <div class="modal">
+    <h4 id="confirmTitle">确认操作？</h4>
+    <p id="confirmText"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button id="confirmNo">取消</button>
+      <button class="danger" id="confirmYes">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 基础 ---------- */
+const $ = id => document.getElementById(id)
+let TOKEN = localStorage.getItem('arkrag_admin_token') || ''
+let KBS = [], selectedKbId = null, pollTimer = null, confirmFn = null
+
+function toast(msg, type) {
+  const t = $('toast'); t.className = 'show ' + (type || ''); t.textContent = msg
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = '', 2500)
+}
+function confirmBox(title, text, fn) {
+  $('confirmTitle').textContent = title; $('confirmText').textContent = text
+  confirmFn = fn; $('confirmMask').classList.add('show')
+}
+$('confirmNo').onclick = () => $('confirmMask').classList.remove('show')
+$('confirmYes').onclick = () => { $('confirmMask').classList.remove('show'); if (confirmFn) confirmFn() }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+function setConn(ok, text) {
+  $('connDot').className = 'dot' + (ok === true ? ' ok' : ok === false ? ' err' : '')
+  $('connText').textContent = text
+}
+
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({ 'X-Api-Key': TOKEN }, opts.headers || {})
+  const res = await fetch('/api/v1' + path, opts)
+  if (res.status === 401) {
+    $('tokenBar').classList.add('show')
+    throw new Error('token 无效或未设置')
+  }
+  let body = null
+  try { body = await res.json() } catch (e) { /* 204 等 */ }
+  if (!res.ok) {
+    const msg = body && body.error ? body.error.message : ('HTTP ' + res.status)
+    throw new Error(msg)
+  }
+  return body
+}
+
+/* ---------- token ---------- */
+$('btnReToken').onclick = () => $('tokenBar').classList.toggle('show')
+$('btnTokenSave').onclick = async () => {
+  TOKEN = $('tokenInput').value.trim()
+  localStorage.setItem('arkrag_admin_token', TOKEN)
+  $('tokenErr').style.display = 'none'
+  try {
+    // 用受保护接口验证（/health 免鉴权，探不出 token 对错）
+    const kbs = await api('/kb')
+    $('tokenBar').classList.remove('show')
+    setConn(true, '已连接 · 知识库 ' + kbs.length)
+    refreshAll()
+  } catch (e) {
+    $('tokenErr').textContent = e.message
+    $('tokenErr').style.display = 'block'
+    setConn(false, 'token 无效')
+  }
+}
+$('tokenInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnTokenSave').click() })
+
+/* ---------- 主题 ---------- */
+$('btnTheme').onclick = () => {
+  const cur = document.documentElement.dataset.mode ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  document.documentElement.dataset.mode = cur === 'dark' ? 'light' : 'dark'
+}
+
+/* ---------- 导航 ---------- */
+document.querySelectorAll('.nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.nav button').forEach(x => x.classList.remove('on'))
+  b.classList.add('on')
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('on'))
+  $('pane-' + b.dataset.pane).classList.add('on')
+  if (b.dataset.pane === 'model') loadModelSettings()
+})
+
+/* ---------- 知识库 ---------- */
+async function refreshKbs() {
+  $('kbTable').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>'
+  try {
+    KBS = await api('/kb')
+    setConn(true, '已连接 · 知识库 ' + KBS.length)
+    $('embWarn').classList.toggle('show',
+      KBS.some(k => k.dims > 0) && KBS.length &&
+      new Set(KBS.map(k => k.embeddingModel + '|' + k.dims)).size > 1)
+  } catch (e) {
+    setConn(false, '不可达')
+    $('kbTable').innerHTML = '<div class="empty">' + esc(e.message) + ' —— 点击右上角 Token 重新登录</div>'
+    return
+  }
+  if (!KBS.length) { $('kbTable').innerHTML = '<div class="empty">还没有知识库，点击右上角「新建知识库」</div>'; showDocs(null); fillKbSelects(); return }
+  renderKbTable(); showDocs(selectedKbId && KBS.some(k => k.id === selectedKbId) ? selectedKbId : KBS[0].id)
+  fillKbSelects()
+}
+function renderKbTable() {
+  let html = '<table><tr><th>名称</th><th>描述</th><th>文档</th><th>块</th><th>模型</th><th>维度</th><th></th></tr>'
+  KBS.forEach(k => {
+    html += '<tr style="cursor:pointer" data-id="' + k.id + '"><td><b>' + esc(k.name) + '</b></td>'
+      + '<td>' + esc(k.description || '—') + '</td><td>' + k.documentCount + '</td><td>' + k.chunkCount + '</td>'
+      + '<td>' + esc(k.embeddingModel || '—') + '</td><td>' + (k.dims || '待回填') + '</td>'
+      + '<td><button class="mini danger" data-del="' + k.id + '">删除</button></td></tr>'
+  })
+  $('kbTable').innerHTML = html + '</table>'
+  $('kbTable').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = ev => {
+    if (ev.target.dataset.del) return
+    showDocs(tr.dataset.id)
+  })
+  $('kbTable').querySelectorAll('[data-del]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation()
+    const kb = KBS.find(x => x.id === b.dataset.del)
+    confirmBox('删除知识库？', '将删除「' + kb.name + '」中的全部文档与向量数据，不可恢复。', async () => {
+      try { await api('/kb/' + kb.id, { method: 'DELETE' }); toast('知识库已删除', 'ok'); selectedKbId = null; refreshKbs() }
+      catch (e) { toast(e.message, 'err') }
+    })
+  })
+}
+$('btnNewKb').onclick = () => { $('kbForm').style.display = 'block'; $('kbName').focus() }
+$('btnCancelKb').onclick = () => $('kbForm').style.display = 'none'
+$('btnCreateKb').onclick = async () => {
+  const name = $('kbName').value.trim()
+  if (!name) { toast('名称不能为空', 'err'); return }
+  try {
+    const kb = await api('/kb', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: $('kbDesc').value.trim() }) })
+    $('kbForm').style.display = 'none'; $('kbName').value = ''; $('kbDesc').value = ''
+    selectedKbId = kb.id; toast('知识库「' + kb.name + '」已创建', 'ok'); refreshKbs()
+  } catch (e) { toast(e.message, 'err') }
+}
+
+/* ---------- 文档 ---------- */
+function showDocs(kbId) {
+  selectedKbId = kbId
+  if (!kbId) { $('docCard').style.display = 'none'; return }
+  const kb = KBS.find(x => x.id === kbId)
+  $('docCard').style.display = 'block'
+  $('docKbName').textContent = kb ? kb.name : ''
+  clearTimeout(pollTimer)
+  pollDocs()
+}
+async function pollDocs() {
+  clearTimeout(pollTimer)
+  if (!selectedKbId) return
+  try {
+    const docs = await api('/kb/' + selectedKbId + '/documents')
+    renderDocs(docs)
+    const busy = docs.some(d => ['PENDING', 'PARSING', 'EMBEDDING'].includes(d.status))
+    if (busy) pollTimer = setTimeout(pollDocs, 2000)
+  } catch (e) { /* 下一轮再试 */ }
+}
+function renderDocs(docs) {
+  if (!docs.length) { $('docTable').innerHTML = '<div class="empty">该库暂无文档</div>'; return }
+  let html = '<table><tr><th>文件名</th><th>状态</th><th>块数</th><th>大小</th><th></th></tr>'
+  docs.forEach(d => {
+    let st
+    if (d.status === 'READY') st = '<span class="st-ok">完成</span>'
+    else if (d.status === 'FAILED') st = '<span class="st-fail">失败<div class="hint">' + esc(d.error || '') + '</div></span>'
+    else st = '<span class="st-run">' + ({ PENDING: '排队中…', PARSING: '解析中…', EMBEDDING: '向量化中…' }[d.status] || d.status) + '</span>'
+    html += '<tr><td>' + esc(d.name) + '</td><td>' + st + '</td><td>' + (d.chunkCount || 0) + '</td>'
+      + '<td>' + (d.size > 1048576 ? (d.size / 1048576).toFixed(1) + 'MB' : Math.ceil(d.size / 1024) + 'KB') + '</td>'
+      + '<td><button class="mini danger" data-deldoc="' + d.id + '">删除</button></td></tr>'
+  })
+  $('docTable').innerHTML = html + '</table>'
+  $('docTable').querySelectorAll('[data-deldoc]').forEach(b => b.onclick = () => {
+    confirmBox('删除文档？', '将从索引中移除该文档的全部文本块。', async () => {
+      try { await api('/kb/' + selectedKbId + '/documents/' + b.dataset.deldoc, { method: 'DELETE' }); toast('文档已删除', 'ok'); pollDocs(); refreshKbs() }
+      catch (e) { toast(e.message, 'err') }
+    })
+  })
+}
+$('btnUpload').onclick = () => $('fileInput').click()
+$('fileInput').onchange = async () => {
+  const files = [...($('fileInput').files || [])]; $('fileInput').value = ''
+  if (!files.length) return
+  const fd = new FormData()
+  files.forEach(f => fd.append('files', f))
+  try {
+    await api('/kb/' + selectedKbId + '/documents', { method: 'POST', body: fd })
+    toast('已提交 ' + files.length + ' 个文档', 'ok'); pollDocs()
+  } catch (e) { toast(e.message, 'err') }
+}
+$('btnRebuild').onclick = () => {
+  const kb = KBS.find(x => x.id === selectedKbId)
+  confirmBox('重建索引？', '将用已上传的原始文件对「' + (kb ? kb.name : '') + '」重新切块并嵌入（换 Embedding 模型后执行）。', async () => {
+    try { const r = await api('/kb/' + selectedKbId + '/rebuild', { method: 'POST' }); toast('已重新排队 ' + r.queued + ' 个文档', 'ok'); pollDocs() }
+    catch (e) { toast(e.message, 'err') }
+  })
+}
+
+/* ---------- 检索 / 问答 ---------- */
+function fillKbSelects() {
+  ;['searchKb', 'askKb'].forEach(id => {
+    const sel = $(id), cur = sel.value
+    sel.innerHTML = '<option value="">全部知识库</option>' +
+      KBS.map(k => '<option value="' + k.id + '">' + esc(k.name) + '</option>').join('')
+    sel.value = cur
+  })
+}
+async function doSearch() {
+  const q = $('searchQuery').value.trim()
+  if (!q) { toast('请输入检索问题', 'err'); return }
+  $('searchMeta').textContent = ''; $('searchHits').innerHTML = '<div class="skeleton"></div>'
+  try {
+    const kbId = $('searchKb').value
+    const out = await api('/search', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, kbIds: kbId ? [kbId] : undefined, topK: 8 }) })
+    $('searchMeta').textContent = '命中 ' + out.hits.length + ' 条 · 用时 ' + out.tookMs + 'ms'
+    $('searchHits').innerHTML = out.hits.length ? out.hits.map(h =>
+      '<div class="card" style="margin-bottom:8px"><div class="row" style="margin-bottom:4px">'
+      + '<span class="badge ok">' + h.score.toFixed(3) + '</span>'
+      + '<span class="cite">' + esc(h.docName) + ' · 第 ' + (h.chunkIndex + 1) + ' 块 · ' + esc(h.kbName) + '</span></div>'
+      + '<div class="hint" style="font-size:12px;color:var(--text-secondary)">' + esc(h.text) + '</div></div>').join('')
+      : '<div class="empty">没有命中内容，试试换一种问法</div>'
+  } catch (e) {
+    $('searchHits').innerHTML = '<div class="empty" style="color:var(--danger)">' + esc(e.message) + '</div>'
+  }
+}
+$('btnSearch').onclick = doSearch
+$('searchQuery').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch() })
+
+async function doAsk() {
+  const q = $('askQuery').value.trim()
+  if (!q) { toast('请输入问题', 'err'); return }
+  $('askOut').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>'
+  try {
+    const kbId = $('askKb').value
+    const out = await api('/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, kbIds: kbId ? [kbId] : undefined, topK: 5 }) })
+    const answer = esc(out.answer).replace(/\[(\d+)\]/g, '<b>[$1]</b>')
+    const cites = (out.citations || []).map(c =>
+      '<div class="cite">[' + c.index + '] ' + esc(c.docName) + ' · 第 ' + (c.chunkIndex + 1) + ' 块 · '
+      + esc(c.kbName) + ' · 相似度 ' + c.score + '</div>').join('')
+    $('askOut').innerHTML = '<div class="answer">' + answer + '</div>'
+      + (cites ? '<div style="margin-top:10px;border-top:1px solid var(--border-subtle);padding-top:8px"><div class="hint" style="margin-bottom:4px">引用来源</div>' + cites + '</div>' : '')
+      + '<div class="hint" style="margin-top:8px">用时 ' + out.tookMs + 'ms</div>'
+  } catch (e) {
+    $('askOut').innerHTML = '<div class="empty" style="color:var(--danger)">' + esc(e.message) + '</div>'
+  }
+}
+$('btnAsk').onclick = doAsk
+$('askQuery').addEventListener('keydown', e => { if (e.key === 'Enter') doAsk() })
+
+/* ---------- 模型配置 ---------- */
+async function loadModelSettings() {
+  try {
+    const s = await api('/settings/model')
+    $('embUrl').value = s.embedding.baseUrl; $('embModel').value = s.embedding.model
+    $('embKey').value = s.embedding.apiKeyMasked; $('embKey').placeholder = 'sk-…'
+    $('embDims').value = s.embedding.dims || ''
+    $('embSource').textContent = s.embedding.source; $('embSource').className = 'badge ' + (s.embedding.configured ? 'ok' : 'err')
+    $('chatUrl').value = s.chat.baseUrl; $('chatModel').value = s.chat.model
+    $('chatKey').value = s.chat.apiKeyMasked
+    $('chatTemp').value = s.chat.configured ? (s.chat.temperature ?? '') : ''
+    $('chatSource').textContent = s.chat.source; $('chatSource').className = 'badge ' + (s.chat.configured ? 'ok' : 'err')
+  } catch (e) { toast(e.message, 'err') }
+}
+$('btnEmbTest').onclick = async () => {
+  $('embTestOut').textContent = '测试中…'
+  try {
+    const r = await api('/settings/model/test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'embedding', baseUrl: $('embUrl').value.trim(), apiKey: $('embKey').value.trim(),
+        model: $('embModel').value.trim(), dims: parseInt($('embDims').value) || null }) })
+    $('embTestOut').textContent = r.ok ? ('✓ ' + r.message + ' · 实际维度 ' + r.dims) : ('✗ ' + r.message)
+    $('embTestOut').style.color = r.ok ? 'var(--success)' : 'var(--danger)'
+  } catch (e) { $('embTestOut').textContent = '✗ ' + e.message; $('embTestOut').style.color = 'var(--danger)' }
+}
+$('btnChatTest').onclick = async () => {
+  $('chatTestOut').textContent = '测试中…'
+  try {
+    const r = await api('/settings/model/test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'chat', baseUrl: $('chatUrl').value.trim(), apiKey: $('chatKey').value.trim(),
+        model: $('chatModel').value.trim(), temperature: parseFloat($('chatTemp').value) || null }) })
+    $('chatTestOut').textContent = r.ok ? ('✓ ' + r.message + ' · 模型回复：' + (r.reply || '').slice(0, 20)) : ('✗ ' + r.message)
+    $('chatTestOut').style.color = r.ok ? 'var(--success)' : 'var(--danger)'
+  } catch (e) { $('chatTestOut').textContent = '✗ ' + e.message; $('chatTestOut').style.color = 'var(--danger)' }
+}
+$('btnSaveModel').onclick = async () => {
+  const emb = { baseUrl: $('embUrl').value.trim(), apiKey: $('embKey').value.trim(),
+    model: $('embModel').value.trim(), dims: parseInt($('embDims').value) || null }
+  const chat = { baseUrl: $('chatUrl').value.trim(), apiKey: $('chatKey').value.trim(),
+    model: $('chatModel').value.trim(), temperature: parseFloat($('chatTemp').value) || null }
+  try {
+    await api('/settings/model', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embedding: emb.baseUrl || emb.model ? emb : null,
+                             chat: chat.baseUrl || chat.model ? chat : null }) })
+    toast('模型配置已保存并热生效', 'ok'); refreshKbs()
+  } catch (e) { toast(e.message, 'err') }
+}
+
+/* ---------- 启动 ---------- */
+async function boot() {
+  if (!TOKEN) { $('tokenBar').classList.add('show'); setConn(null, '未设置 token'); return }
+  try {
+    const h = await api('/health')
+    setConn(true, '已连接 · v' + h.version)
+    refreshAll()
+  } catch (e) {
+    setConn(false, 'token 无效或服务不可达')
+    $('tokenBar').classList.add('show')
+  }
+}
+function refreshAll() { refreshKbs(); }
+boot()
+</script>
+</body>
+</html>

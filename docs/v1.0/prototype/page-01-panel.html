@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原型 · ArkRAG 插件面板</title>
+<style>
+  /* ===== 设计 Token（1:1 对应 03-interaction.md 第 0 节；命名 = ArkWork 插件主题契约） ===== */
+  :root{
+    color-scheme: light;
+    --bg-base:#FFFFFF; --bg-surface:#F7F7F8; --bg-surface-2:#F0F0F2; --bg-surface-3:#E5E5E8;
+    --bg-overlay:#FFFFFF; --bg-input:#FFFFFF;
+    --border-subtle:rgba(0,0,0,.05); --border-default:rgba(0,0,0,.10); --border-strong:rgba(0,0,0,.16);
+    --text-primary:#0F1115; --text-secondary:#57575C; --text-tertiary:#83838A; --text-faint:#90959C;
+    --text-inverse:#FFFFFF;
+    --accent:#4F46E5; --accent-soft:rgba(79,70,229,.14); --accent-strong:rgba(79,70,229,.24);
+    --success:#16A34A; --success-soft:rgba(22,163,74,.12);
+    --warning:#D97706; --warning-soft:rgba(217,119,6,.12);
+    --danger:#DC2626; --danger-soft:rgba(220,38,38,.10);
+    --info:#2563EB; --info-soft:rgba(37,99,235,.10);
+    --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+    --shadow-overlay:0 8px 24px rgba(0,0,0,.12);
+    --fs-aux:11px; --fs-sub:12px; --fs-body:13px; --fs-h3:14px; --fs-h1:18px;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-6:24px;
+  }
+  [data-theme="dark"]{
+    color-scheme: dark;
+    --bg-base:#1A1B1E; --bg-surface:#202123; --bg-surface-2:#26272B; --bg-surface-3:#323338;
+    --bg-overlay:#2A2B2F; --bg-input:#26272B;
+    --border-subtle:rgba(255,255,255,.06); --border-default:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.18);
+    --text-primary:#F1F3F5; --text-secondary:#B6B7BA; --text-tertiary:#8E9094; --text-faint:#6F7075;
+    --text-inverse:#0F1115;
+    --accent:#679EFE; --accent-soft:rgba(103,158,254,.14); --accent-strong:rgba(103,158,254,.24);
+    --success:#34D399; --success-soft:rgba(52,211,153,.14);
+    --warning:#FBBF24; --warning-soft:rgba(251,191,36,.14);
+    --danger:#F87171; --danger-soft:rgba(248,113,113,.14);
+    --info:#60A5FA; --info-soft:rgba(96,165,250,.14);
+    --shadow-overlay:0 8px 24px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg-surface-2); color:var(--text-primary);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+    font-size:var(--fs-body); min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center; padding:var(--sp-6);
+  }
+  a{color:var(--accent);text-decoration:none}
+  /* ===== 面板外壳（模拟 ArkWork dock 面板 420×680） ===== */
+  .shell{width:420px;height:680px;background:var(--bg-base);border:1px solid var(--border-default);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .panel-head{height:48px;flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+    padding:0 var(--sp-4);border-bottom:1px solid var(--border-subtle)}
+  .panel-head .title{font-size:var(--fs-h1);font-weight:600}
+  .ver-badge{font-size:var(--fs-aux);color:var(--text-tertiary);border:1px solid var(--border-default);
+    border-radius:999px;padding:1px 8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);flex:0 0 auto}
+  .dot.ok{background:var(--success)} .dot.err{background:var(--danger)} .dot.warn{background:var(--warning)}
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:var(--sp-2)}
+  .conn-text{font-size:var(--fs-aux);color:var(--text-tertiary)}
+  /* Tab 栏 */
+  .tabs{flex:0 0 auto;display:flex;border-bottom:1px solid var(--border-subtle)}
+  .tab{flex:1;height:40px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-body);
+    color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;user-select:none}
+  .tab:hover{color:var(--text-primary);background:var(--bg-surface)}
+  .tab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  /* 内容区 */
+  .content{flex:1;overflow-y:auto;padding:var(--sp-4);position:relative}
+  .pane{display:none}.pane.on{display:block}
+  /* 通用控件 */
+  .btn{height:36px;padding:0 var(--sp-4);border-radius:var(--radius-md);font-size:var(--fs-body);
+    border:1px solid var(--border-default);background:var(--bg-surface-2);color:var(--text-primary);cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;user-select:none}
+  .btn:hover{background:var(--bg-surface-3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  [data-theme="dark"] .btn.primary{color:#0F1115;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.danger{color:var(--danger);border-color:var(--danger)}
+  .btn.sm{height:28px;padding:0 10px;font-size:var(--fs-sub);border-radius:var(--radius-sm)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn .spin{width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;
+    animation:spin .8s linear infinite;display:none}
+  .btn.loading .spin{display:inline-block}
+  .btn.loading{pointer-events:none;opacity:.8}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .input{width:100%;height:36px;border:1px solid var(--border-default);border-radius:var(--radius-md);
+    background:var(--bg-input);color:var(--text-primary);padding:0 var(--sp-3);font-size:var(--fs-body);outline:none}
+  .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .input::placeholder{color:var(--text-faint)}
+  .field-label{font-size:var(--fs-sub);color:var(--text-secondary);margin-bottom:var(--sp-1);display:block}
+  .field-err{font-size:var(--fs-aux);color:var(--danger);margin-top:var(--sp-1);display:none}
+  .field-err.show{display:block}
+  .hint{font-size:var(--fs-aux);color:var(--text-faint);line-height:1.5}
+  .section-title{font-size:var(--fs-h3);font-weight:600;margin-bottom:var(--sp-2)}
+  /* ===== Tab1 知识库 ===== */
+  .kb-toolbar{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+  .kb-form{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--sp-3);
+    margin-bottom:var(--sp-3);background:var(--bg-surface);display:none}
+  .kb-form.show{display:block}
+  .kb-form .row{display:flex;gap:var(--sp-2);margin-top:var(--sp-2)}
+  .kb-card{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--sp-3);
+    margin-bottom:var(--sp-2);cursor:pointer;position:relative;background:var(--bg-surface)}
+  .kb-card:hover{background:var(--bg-surface-2)}
+  .kb-card.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .kb-name{font-weight:600;font-size:var(--fs-body);display:flex;align-items:center;gap:var(--sp-2)}
+  .kb-desc{font-size:var(--fs-sub);color:var(--text-secondary);margin-top:2px}
+  .kb-meta{font-size:var(--fs-aux);color:var(--text-faint);margin-top:var(--sp-1)}
+  .kb-more{position:absolute;right:var(--sp-3);top:var(--sp-3);width:28px;height:28px;border-radius:var(--radius-sm);
+    display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;border:none;background:transparent}
+  .kb-more:hover{background:var(--bg-surface-3);color:var(--text-primary)}
+  .menu{position:absolute;right:var(--sp-3);top:52px;background:var(--bg-overlay);border:1px solid var(--border-default);
+    border-radius:var(--radius-md);box-shadow:var(--shadow-overlay);padding:var(--sp-1);z-index:30;display:none;min-width:120px}
+  .menu.show{display:block}
+  .menu button{display:block;width:100%;text-align:left;padding:8px var(--sp-3);font-size:var(--fs-sub);
+    background:none;border:none;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-primary)}
+  .menu button:hover{background:var(--bg-surface-2)}
+  .menu button.danger{color:var(--danger)}
+  .ingest{margin-top:var(--sp-4)}
+  .ingest-line{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
+    border:1px solid var(--border-subtle);border-radius:var(--radius-md);margin-bottom:var(--sp-2);font-size:var(--fs-sub);
+    background:var(--bg-surface)}
+  .ingest-line .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st-ok{color:var(--success)} .st-run{color:var(--info)} .st-fail{color:var(--danger)}
+  .icon{width:16px;height:16px;flex:0 0 auto}
+  .retry{color:var(--accent);cursor:pointer;font-size:var(--fs-aux)}
+  /* ===== Tab2 检索试用 ===== */
+  .kb-pick{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+  .chip{font-size:var(--fs-aux);padding:4px 10px;border-radius:999px;border:1px solid var(--border-default);
+    color:var(--text-secondary);cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .search-row{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+  .search-meta{font-size:var(--fs-aux);color:var(--text-faint);margin-bottom:var(--sp-3)}
+  .hit{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--sp-3);margin-bottom:var(--sp-2);background:var(--bg-surface)}
+  .hit-top{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1)}
+  .score{font-size:var(--fs-aux);font-weight:600;color:var(--accent);background:var(--accent-soft);
+    border-radius:var(--radius-sm);padding:1px 6px}
+  .score.mid{color:var(--text-secondary);background:var(--bg-surface-3)}
+  .src{font-size:var(--fs-aux);color:var(--text-tertiary)}
+  .hit-text{font-size:var(--fs-sub);color:var(--text-secondary);line-height:1.6;cursor:pointer;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .hit-text.open{display:block}
+  /* ===== Tab3 连接设置 ===== */
+  .tok-row{position:relative}
+  .tok-row .eye{position:absolute;right:var(--sp-2);top:50%;transform:translateY(-50%);border:none;background:none;
+    color:var(--text-tertiary);cursor:pointer;font-size:var(--fs-sub);padding:4px}
+  .inline-err{display:none;align-items:flex-start;gap:var(--sp-2);border:1px solid var(--danger);
+    background:var(--danger-soft);color:var(--danger);border-radius:var(--radius-md);padding:var(--sp-3);
+    font-size:var(--fs-sub);line-height:1.5;margin-top:var(--sp-3)}
+  .inline-err.show{display:flex}
+  .inline-err b{font-weight:600}
+  .ok-banner{display:none;align-items:center;gap:var(--sp-2);border:1px solid var(--success);background:var(--success-soft);
+    color:var(--success);border-radius:var(--radius-md);padding:var(--sp-3);font-size:var(--fs-sub);margin-top:var(--sp-3)}
+  .ok-banner.show{display:flex}
+  /* ===== 状态变体 ===== */
+  .state-block{display:none}
+  .state-block.on{display:block}
+  .skeleton{padding:var(--sp-2) 0}
+  .sk-line{height:64px;border-radius:var(--radius-md);margin-bottom:var(--sp-2);
+    background:linear-gradient(90deg,var(--bg-surface-2) 25%,var(--bg-surface-3) 50%,var(--bg-surface-2) 75%);
+    background-size:200% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:var(--sp-6) var(--sp-4);text-align:center}
+  .empty .glyph{width:56px;height:56px;border-radius:50%;background:var(--bg-surface-2);display:flex;
+    align-items:center;justify-content:center;margin-bottom:var(--sp-3);color:var(--text-tertiary)}
+  .empty .t1{font-size:var(--fs-h3);font-weight:600;margin-bottom:var(--sp-1)}
+  .empty .t2{font-size:var(--fs-sub);color:var(--text-tertiary);margin-bottom:var(--sp-4);line-height:1.6}
+  .errbox{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:var(--sp-6) var(--sp-4);text-align:center}
+  .errbox .glyph{width:56px;height:56px;border-radius:50%;background:var(--danger-soft);display:flex;
+    align-items:center;justify-content:center;margin-bottom:var(--sp-3);color:var(--danger)}
+  .errbox .t1{font-size:var(--fs-h3);font-weight:600;margin-bottom:var(--sp-1)}
+  .errbox .t2{font-size:var(--fs-sub);color:var(--text-tertiary);margin-bottom:var(--sp-4);line-height:1.6}
+  /* 引导卡（未连接） */
+  .guide{border:1px dashed var(--border-strong);border-radius:var(--radius-md);padding:var(--sp-6) var(--sp-4);
+    text-align:center;background:var(--bg-surface)}
+  /* toast / modal（面板内） */
+  .toast{position:absolute;top:56px;left:50%;transform:translateX(-50%) translateY(-8px);opacity:0;
+    background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--border-default);
+    box-shadow:var(--shadow-overlay);border-radius:var(--radius-md);padding:10px var(--sp-4);font-size:var(--fs-sub);
+    display:flex;align-items:center;gap:var(--sp-2);transition:all .25s;pointer-events:none;z-index:60;max-width:88%}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-color:var(--success)} .toast.err{border-color:var(--danger)}
+  .modal-mask{position:absolute;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-mask.show{display:flex}
+  .modal{width:320px;background:var(--bg-overlay);border:1px solid var(--border-default);border-radius:var(--radius-lg);
+    padding:var(--sp-4);box-shadow:var(--shadow-overlay)}
+  .modal h4{font-size:var(--fs-h3);margin-bottom:var(--sp-2)}
+  .modal p{font-size:var(--fs-sub);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--sp-4)}
+  .modal .acts{display:flex;gap:var(--sp-2);justify-content:flex-end}
+  /* 状态切换器 / 主题切换（原型工具，非产品 UI） */
+  .proto-tools{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:var(--sp-2);z-index:100;
+    background:var(--bg-overlay);border:1px solid var(--border-default);border-radius:var(--radius-lg);
+    padding:var(--sp-2);box-shadow:var(--shadow-overlay)}
+  .proto-tools .cap{font-size:var(--fs-aux);color:var(--text-faint);text-align:center}
+  .proto-tools .row{display:flex;gap:var(--sp-1)}
+  .proto-tools button{font-size:var(--fs-aux);padding:5px 9px;border-radius:999px;border:1px solid var(--border-default);
+    background:var(--bg-surface);color:var(--text-secondary);cursor:pointer}
+  .proto-tools button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .backlink{position:fixed;left:16px;bottom:16px;font-size:var(--fs-sub);z-index:100}
+</style>
+</head>
+<body>
+
+<div class="shell" id="shell">
+  <!-- 头部 -->
+  <div class="panel-head">
+    <span class="dot ok" id="connDot"></span>
+    <span class="title">ArkRAG</span>
+    <span class="ver-badge" id="connText">已连接 · v1.0.0</span>
+    <div class="head-right"><span class="conn-text" id="connHint">知识库 3</span></div>
+  </div>
+
+  <!-- Tab 栏 -->
+  <div class="tabs">
+    <div class="tab on" data-tab="kb">知识库</div>
+    <div class="tab" data-tab="search">检索试用</div>
+    <div class="tab" data-tab="conn">连接设置</div>
+  </div>
+
+  <div class="content">
+    <!-- ================ Tab1 知识库 ================ -->
+    <div class="pane on" id="pane-kb">
+      <!-- 五态：默认 -->
+      <div class="state-block on" data-state="default">
+        <div class="kb-toolbar">
+          <button class="btn primary" style="flex:1" onclick="toggleKbForm()">＋ 新建知识库</button>
+          <button class="btn" onclick="toast('已选择系统文件选择器（原型演示）','ok')">⬆ 上传文档</button>
+        </div>
+        <div class="kb-form" id="kbForm">
+          <label class="field-label">名称（必填，≤64 字符）</label>
+          <input class="input" id="kbName" placeholder="例如：产品需求文档库">
+          <div class="field-err" id="kbNameErr">名称不能为空</div>
+          <label class="field-label" style="margin-top:var(--sp-2)">描述（选填）</label>
+          <input class="input" placeholder="这个知识库用来放什么内容">
+          <div class="row">
+            <button class="btn primary sm" onclick="createKb()">创建</button>
+            <button class="btn sm" onclick="toggleKbForm()">取消</button>
+          </div>
+        </div>
+        <div class="kb-card sel" onclick="selectKb(this)">
+          <button class="kb-more" onclick="openMenu(event)">⋯</button>
+          <div class="kb-name">产品需求文档库</div>
+          <div class="kb-desc">ArkWork 与 ArkRAG 的 PRD、评审记录</div>
+          <div class="kb-meta">12 个文档 · 486 块 · 2 小时前更新</div>
+        </div>
+        <div class="kb-card" onclick="selectKb(this)">
+          <button class="kb-more" onclick="openMenu(event)">⋯</button>
+          <div class="kb-name">API 接口文档</div>
+          <div class="kb-desc">REST /api/v1 契约与错误码</div>
+          <div class="kb-meta">8 个文档 · 312 块 · 昨天更新</div>
+        </div>
+        <div class="kb-card" onclick="selectKb(this)">
+          <button class="kb-more" onclick="openMenu(event)">⋯</button>
+          <div class="kb-name">会议纪要 2026</div>
+          <div class="kb-desc">周会与评审会纪要归档</div>
+          <div class="kb-meta">23 个文档 · 1201 块 · 3 天前更新</div>
+        </div>
+        <div class="ingest">
+          <div class="section-title">摄入状态</div>
+          <div class="ingest-line">
+            <svg class="icon st-ok" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span class="name">ArkWork-插件设计-v3.pdf</span><span class="st-ok">完成 · 96 块</span>
+          </div>
+          <div class="ingest-line">
+            <svg class="icon st-run" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="27 14" stroke-linecap="round"/></svg>
+            <span class="name">产品路线图 2026Q4.docx</span><span class="st-run">向量化中…</span>
+          </div>
+          <div class="ingest-line">
+            <svg class="icon st-fail" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span class="name">竞品分析笔记.pdf</span><span class="st-fail">失败 · 文本层为空（扫描件？）</span><span class="retry">重试</span>
+          </div>
+        </div>
+      </div>
+      <!-- 五态：加载 -->
+      <div class="state-block" data-state="loading"><div class="skeleton"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div></div>
+      <!-- 五态：空 -->
+      <div class="state-block" data-state="empty">
+        <div class="empty">
+          <div class="glyph"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="t1">还没有知识库</div>
+          <div class="t2">创建一个知识库，上传 PDF / Word / Markdown<br>即可让 Agent 做语义检索</div>
+          <button class="btn primary" onclick="toggleKbForm();setState('default')">＋ 新建知识库</button>
+        </div>
+      </div>
+      <!-- 五态：错误 -->
+      <div class="state-block" data-state="error">
+        <div class="errbox">
+          <div class="glyph"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="t1">无法连接 ArkRAG 服务</div>
+          <div class="t2">服务未启动或地址错误<br>确认 arkrag-server 已启动后重试</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="switchTab('conn')">去配置</button>
+            <button class="btn primary" onclick="setState('default');toast('已重新连接','ok')">重试</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================ Tab2 检索试用 ================ -->
+    <div class="pane" id="pane-search">
+      <!-- 五态：默认 -->
+      <div class="state-block on" data-state="default">
+        <div class="kb-pick">
+          <span class="chip on">全部</span><span class="chip on">产品需求文档库</span>
+          <span class="chip">API 接口文档</span><span class="chip">会议纪要 2026</span>
+        </div>
+        <div class="search-row">
+          <input class="input" id="q" value="RAG 服务怎么配置 embedding 模型？">
+          <button class="btn primary" onclick="toast('已检索（原型演示）','ok')">检索</button>
+        </div>
+        <div class="search-meta">命中 3 条 · 用时 212ms · topK=5</div>
+        <div class="hit">
+          <div class="hit-top"><span class="score">0.872</span><span class="src">系统设计.md · 第 12 块</span></div>
+          <div class="hit-text" onclick="this.classList.toggle('open')">embedding 模型通过 application.yml 的 arkrag.embedding 配置段设置，需提供 OpenAI 兼容端点的 baseURL、apiKey、model 名称与向量维度。配置后重启服务生效；更换模型后需重建索引，否则检索时报维度不一致错误。支持 DeepSeek、通义千问、Ollama、vLLM 等兼容服务…</div>
+        </div>
+        <div class="hit">
+          <div class="hit-top"><span class="score">0.814</span><span class="src">快速开始.md · 第 4 块</span></div>
+          <div class="hit-text" onclick="this.classList.toggle('open')">在启动服务前，先在配置文件中填入 Embedding 模型信息。以 Ollama 为例：baseURL 填 http://127.0.0.1:11434/v1，model 填 bge-m3，维度 1024。未配置 Embedding 模型时，文档摄入与检索接口会返回 EMBEDDING_NOT_CONFIGURED 错误码…</div>
+        </div>
+        <div class="hit">
+          <div class="hit-top"><span class="score mid">0.776</span><span class="src">FAQ.md · 第 9 块</span></div>
+          <div class="hit-text" onclick="this.classList.toggle('open')">检索时返回 EMBEDDING_DIMENSION_MISMATCH 说明你更换过 embedding 模型。此时应调用 POST /api/v1/kb/{id}/rebuild 重建索引，或删除后重新上传文档。旧向量与新模型的查询向量不可混用…</div>
+        </div>
+      </div>
+      <div class="state-block" data-state="loading">
+        <div class="search-row"><input class="input" value="RAG 服务怎么配置 embedding 模型？" disabled><button class="btn primary loading"><span class="spin"></span>检索</button></div>
+        <div class="skeleton"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+      </div>
+      <div class="state-block" data-state="empty">
+        <div class="search-row"><input class="input" value="完全不相关的查询词 xyzzy" ><button class="btn primary">检索</button></div>
+        <div class="empty">
+          <div class="glyph"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="t1">没有命中内容</div>
+          <div class="t2">试试换一种问法，或检查知识库里<br>是否已上传相关文档</div>
+        </div>
+      </div>
+      <div class="state-block" data-state="error">
+        <div class="errbox">
+          <div class="glyph"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="t1">检索失败</div>
+          <div class="t2">Embedding 模型未配置（EMBEDDING_NOT_CONFIGURED）<br>请在服务端 application.yml 中配置后重启</div>
+          <button class="btn primary" onclick="setState('default')">重试</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================ Tab3 连接设置 ================ -->
+    <div class="pane" id="pane-conn">
+      <div class="state-block on" data-state="default">
+        <div class="section-title">服务连接</div>
+        <label class="field-label">服务地址</label>
+        <input class="input" id="baseUrl" value="http://127.0.0.1:8964">
+        <div class="field-err" id="urlErr">请输入 http/https 开头的合法地址</div>
+        <label class="field-label" style="margin-top:var(--sp-3)">API Token</label>
+        <div class="tok-row">
+          <input class="input" id="tok" type="password" value="arkrag_sk_9f2e8c71a4" style="padding-right:44px">
+          <button class="eye" onclick="toggleTok()">显示</button>
+        </div>
+        <div class="hint" style="margin-top:var(--sp-1)">Token 保存于 ArkWork secrets.json，不会明文出现在插件配置里</div>
+        <div class="inline-err" id="connErr">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex:0 0 auto;margin-top:1px"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.8V8.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.2" r=".9" fill="currentColor"/></svg>
+          <span><b>连接失败（401 Unauthorized）</b>：API Token 无效或已过期。请检查 arkrag-server 的 <code>arkrag.server.token</code> 配置后重试。</span>
+        </div>
+        <div class="ok-banner" id="connOk">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex:0 0 auto"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span>连接成功 · ArkRAG v1.0.0 · 嵌入式向量库 · Embedding 已配置（bge-m3 · 1024 维）</span>
+        </div>
+        <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-4)">
+          <button class="btn" id="testBtn" onclick="testConn()">测试连接</button>
+          <button class="btn primary" style="flex:1" onclick="toast('配置已保存','ok')">保存</button>
+        </div>
+        <div class="hint" style="margin-top:var(--sp-4)">
+          尚未安装服务？在终端运行 <code style="background:var(--bg-surface-2);padding:1px 5px;border-radius:4px">arkrag-server start</code> 启动本地服务，端口与 token 见服务端配置。
+        </div>
+      </div>
+      <div class="state-block" data-state="error">
+        <div class="errbox">
+          <div class="glyph"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="t1">配置读取失败</div>
+          <div class="t2">插件 storage 不可用<br>请重装插件或重启 ArkWork</div>
+          <button class="btn primary" onclick="setState('default')">重试</button>
+        </div>
+      </div>
+      <div class="state-block" data-state="loading"><div class="skeleton"><div class="sk-line"></div></div></div>
+    </div>
+  </div>
+
+  <!-- toast -->
+  <div class="toast" id="toast"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" id="toastIcon"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span id="toastText"></span></div>
+
+  <!-- 删除确认 -->
+  <div class="modal-mask" id="delMask">
+    <div class="modal">
+      <h4>删除知识库？</h4>
+      <p>将删除「产品需求文档库」中的 <b>12 个文档</b>与全部向量数据，<b style="color:var(--danger)">不可恢复</b>。</p>
+      <div class="acts">
+        <button class="btn" onclick="closeDel()">取消</button>
+        <button class="btn danger" onclick="closeDel();toast('知识库已删除','err')">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KB 菜单 -->
+  <div class="menu" id="kbMenu">
+    <button onclick="closeMenu();toast('原型未覆盖此功能')">重命名</button>
+    <button class="danger" onclick="closeMenu();showDel()">删除知识库…</button>
+  </div>
+</div>
+
+<!-- 原型工具 -->
+<div class="proto-tools">
+  <div class="cap">状态切换（原型工具）</div>
+  <div class="row" id="stateRow">
+    <button class="on" data-s="default">默认</button><button data-s="loading">加载</button>
+    <button data-s="empty">空</button><button data-s="error">错误</button><button data-s="success">成功</button>
+  </div>
+  <div class="cap" style="margin-top:4px">宿主主题</div>
+  <div class="row">
+    <button class="on" data-t="light">浅色</button><button data-t="dark">深色</button>
+  </div>
+</div>
+<a class="backlink" href="index.html">← 返回原型总览</a>
+
+<script>
+  let curTab='kb';
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+  function switchTab(name){
+    curTab=name;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
+    document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+name));
+    // 每次切 Tab 回到默认态，切换器高亮复位
+    setState('default');
+  }
+  function setState(s){
+    document.querySelectorAll('#stateRow button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+    const pane=document.getElementById('pane-'+curTab);
+    if(s==='success'){toast('连接成功 · ArkRAG v1.0.0','ok');return;}
+    pane.querySelectorAll('.state-block').forEach(b=>b.classList.toggle('on',b.dataset.state===s));
+    // 全局连接状态点跟随（演示：error→红，default→绿）
+    const dot=document.getElementById('connDot'),txt=document.getElementById('connText');
+    if(curTab!=='conn'){
+      dot.className='dot '+(s==='error'?'err':'ok');
+      txt.textContent=s==='error'?'不可达':'已连接 · v1.0.0';
+    }
+  }
+  document.querySelectorAll('#stateRow button').forEach(b=>b.addEventListener('click',()=>setState(b.dataset.s)));
+  document.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));
+    document.documentElement.dataset.theme=b.dataset.t;
+  }));
+  function toggleKbForm(){document.getElementById('kbForm').classList.toggle('show');}
+  function createKb(){
+    const v=document.getElementById('kbName').value.trim();
+    if(!v){document.getElementById('kbNameErr').classList.add('show');return;}
+    document.getElementById('kbNameErr').classList.remove('show');
+    toggleKbForm();toast('知识库「'+v+'」已创建','ok');
+  }
+  function selectKb(el){
+    document.querySelectorAll('.kb-card').forEach(c=>c.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  function openMenu(e){e.stopPropagation();const m=document.getElementById('kbMenu');const r=e.target.getBoundingClientRect(),s=document.getElementById('shell').getBoundingClientRect();m.style.top=(r.bottom-s.top+2)+'px';m.style.left='';m.style.right=(s.right-r.right)+'px';m.classList.add('show');}
+  function closeMenu(){document.getElementById('kbMenu').classList.remove('show');}
+  function showDel(){document.getElementById('delMask').classList.add('show');}
+  function closeDel(){document.getElementById('delMask').classList.remove('show');}
+  function toggleTok(){const t=document.getElementById('tok'),b=t.nextElementSibling;t.type=t.type==='password'?'text':'password';b.textContent=t.type==='password'?'显示':'隐藏';}
+  function testConn(){
+    const btn=document.getElementById('testBtn');btn.classList.add('loading');btn.innerHTML='<span class="spin"></span>测试连接';
+    setTimeout(()=>{btn.classList.remove('loading');btn.textContent='测试连接';
+      const url=document.getElementById('baseUrl').value;
+      if(!/^https?:\/\//.test(url)){document.getElementById('urlErr').classList.add('show');return;}
+      document.getElementById('urlErr').classList.remove('show');
+      document.getElementById('connOk').classList.add('show');document.getElementById('connErr').classList.remove('show');
+    },900);
+  }
+  document.getElementById('baseUrl').addEventListener('blur',e=>{
+    document.getElementById('urlErr').classList.toggle('show',!/^https?:\/\//.test(e.target.value.trim()));
+  });
+  let toastTimer;
+  function toast(msg,type){
+    const t=document.getElementById('toast');t.className='toast show '+(type||'');document.getElementById('toastText').textContent=msg;
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2500);
+  }
+  document.addEventListener('click',e=>{if(!e.target.closest('.kb-more')&&!e.target.closest('.menu'))closeMenu();});
+</script>
+</body>
+</html>

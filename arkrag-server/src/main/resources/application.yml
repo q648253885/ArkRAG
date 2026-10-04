@@ -1,0 +1,43 @@
+server:
+  port: 8964
+
+spring:
+  application:
+    name: arkrag
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 200MB
+
+arkrag:
+  server:
+    # 安全红线：token 未配置或 <16 位时服务拒绝启动。
+    # 也可用环境变量 ARKRAG_TOKEN 注入。
+    token: "${ARKRAG_TOKEN:}"
+  data-dir: "${ARKRAG_DATA_DIR:${user.home}/.arkrag/data}"
+  embedding:
+    # OpenAI 兼容端点（DeepSeek/通义/Ollama/vLLM 均可）。
+    # 例（Ollama）：base-url http://127.0.0.1:11434/v1  model bge-m3  dims 1024
+    base-url: "${ARKRAG_EMBEDDING_BASE_URL:}"
+    api-key: "${ARKRAG_EMBEDDING_API_KEY:}"
+    model: "${ARKRAG_EMBEDDING_MODEL:}"
+    # 显式维度（可选）；不填则用首个真实向量回填
+    dims: ${ARKRAG_EMBEDDING_DIMS:0}
+    batch-size: 32
+  chunk:
+    size: 1000      # 字符；递归切块、段落边界优先
+    overlap: 150
+  chat:
+    # Chat LLM 启动初值（v1.1 独立问答用；控制台「模型配置」页可在线修改并热生效）
+    base-url: "${ARKRAG_CHAT_BASE_URL:}"
+    api-key: "${ARKRAG_CHAT_API_KEY:}"
+    model: "${ARKRAG_CHAT_MODEL:}"
+    temperature: 0.3
+  ingest:
+    max-file-size-mb: 50
+    workers: 2
+
+logging:
+  level:
+    root: INFO
+    com.arkrag: DEBUG

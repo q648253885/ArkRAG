@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.1",
+  "id": "arkrag.rag",
+  "name": "ArkRAG 知识检索",
+  "version": "1.1.1",
+  "author": "ArkRAG",
+  "description": "把 ArkRAG 知识库接入 Agent：语义检索工具（rag_search / rag_list_kbs）+ 知识库管理面板（建库、上传文档、摄入状态、检索试用、连接设置）",
+  "kind": "tool",
+  "main": "main.js",
+  "renderer": "index.html",
+  "enabledByDefault": true,
+  "engines": { "arkwork": "^0.36.0" },
+  "activation": ["onStartup"],
+  "permissions": ["net", "tools.register", "storage", "views.register"],
+  "provides": {
+    "tools": [
+      {
+        "name": "rag_search",
+        "description": "在用户的本地知识库（PDF/Word/Markdown 等文档，由 ArkRAG 服务管理）中做语义检索，返回最相关的文本片段与出处（知识库/文档/块序号/相似度）。回答事实性问题、引用用户资料、查询项目文档时优先使用本工具。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "检索问题（自然语言，1..2000 字符）" },
+            "kb_ids": { "type": "array", "items": { "type": "string" }, "description": "限定知识库 id 列表；缺省检索全部知识库" },
+            "top_k": { "type": "integer", "description": "返回条数 1..50，默认 5" }
+          },
+          "required": ["query"]
+        }
+      },
+      {
+        "name": "rag_list_kbs",
+        "description": "列出可用的本地知识库（名称、描述、文档数、块数）。检索前可用它确认目标知识库 id。",
+        "inputSchema": { "type": "object", "properties": {} }
+      },
+      {
+        "name": "rag_ask",
+        "description": "基于用户本地知识库回答问题：先语义检索相关资料，再由 Chat 模型生成带 [n] 引用编号的答案。需要基于用户文档给出结论性回答（而非仅列出片段）时优先使用本工具；服务端需已配置 Chat 模型（未配置时返回配置指引）。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "问题（自然语言，1..2000 字符）" },
+            "kb_ids": { "type": "array", "items": { "type": "string" }, "description": "限定知识库 id 列表；缺省检索全部知识库" },
+            "top_k": { "type": "integer", "description": "召回条数 1..50，默认 5" }
+          },
+          "required": ["query"]
+        }
+      }
+    ],
+    "views": [
+      {
+        "viewRef": "view:arkrag",
+        "title": "RAG",
+        "icon": "Book",
+        "renderer": "index.html",
+        "placement": "dock"
+      }
+    ]
+  }
+}
