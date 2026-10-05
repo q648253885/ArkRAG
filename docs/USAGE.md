@@ -1,6 +1,6 @@
 # ArkRAG 使用文档
 
-> 版本：v1.1.0 ｜ 更新：2026-10-04 ｜ 适用产物：`dist/arkrag-server.jar`、`dist/arkrag-mcp-stdio.jar`、`dist/arkrag-plugin-1.1.0.zip`
+> 版本：v1.1.0 ｜ 更新：2026-10-04 ｜ 适用产物：`dist/arkrag-server.jar`、`dist/arkrag-mcp-stdio.jar`、`dist/arkrag-plugin-1.1.2.zip`
 > 架构与实现原理见 [ARCHITECTURE.md](ARCHITECTURE.md)；接口契约正本见 [v1.0/04-system-design.md](v1.0/04-system-design.md) 与 [v1.1/04-system-design-delta.md](v1.1/04-system-design-delta.md)。
 
 ## 目录
@@ -35,7 +35,7 @@
 ```bash
 # A. 直接使用现成产物（仓库已带）
 ls dist/
-# arkrag-server.jar / arkrag-mcp-stdio.jar / arkrag-plugin-1.1.0.zip
+# arkrag-server.jar / arkrag-mcp-stdio.jar / arkrag-plugin-1.1.2.zip
 
 # B. 从源码构建
 ./mvnw -q -DskipTests package        # 首次构建会自举 Maven（仓库自带 tools/maven）
@@ -139,7 +139,7 @@ java -jar dist/arkrag-server.jar
 
 ## 7. 接入 ArkWork（插件）
 
-1. ArkWork → 设置 → 插件 → 从 zip 安装 → 选择 `dist/arkrag-plugin-1.1.0.zip`；
+1. ArkWork → 设置 → 插件 → 从 zip 安装 → 选择 `dist/arkrag-plugin-1.1.2.zip`；
 2. 确认 ArkRAG 服务已启动且**服务地址可达**（ArkWork 与服务同机时默认 `http://127.0.0.1:8964` 即可）；
 3. 侧边栏出现 **Book 图标的 RAG 面板** → "连接设置"填服务地址与 API Token → 测试连接（应显示"✓ 连接成功"）→ 保存；
 4. 面板内可建库、上传、看摄入状态、检索试用——与控制台同源；

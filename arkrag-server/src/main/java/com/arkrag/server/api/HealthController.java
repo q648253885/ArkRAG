@@ -24,7 +24,7 @@ public class HealthController {
         this.config = config;
         // Boot 嵌套 jar 里 getImplementationVersion() 返回 null：回退到构建时传入的版本常量
         this.version = HealthController.class.getPackage().getImplementationVersion() != null
-                ? HealthController.class.getPackage().getImplementationVersion() : "1.1.1";
+                ? HealthController.class.getPackage().getImplementationVersion() : "1.1.2";
     }
 
     /**

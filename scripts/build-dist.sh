@@ -7,9 +7,9 @@ cp arkrag-server/target/arkrag-server.jar dist/
 cp arkrag-mcp-stdio/target/arkrag-mcp-stdio-jar-with-dependencies.jar dist/arkrag-mcp-stdio.jar
 chmod +x scripts/*.sh
 # 插件 zip（plugin.json 在包根，符合 ArkWork zip 安装约束）
-rm -f dist/arkrag-plugin-1.1.1.zip
-(cd plugin/arkrag && zip -qr ../../dist/arkrag-plugin-1.1.1.zip .)
+rm -f dist/arkrag-plugin-1.1.2.zip
+(cd plugin/arkrag && zip -qr ../../dist/arkrag-plugin-1.1.2.zip .)
 echo "== dist/ =="
 ls -la dist/
 echo "== 插件 zip 内容 =="
-unzip -l dist/arkrag-plugin-1.1.1.zip
+unzip -l dist/arkrag-plugin-1.1.2.zip

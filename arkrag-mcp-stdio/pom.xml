@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>com.arkrag</groupId>
-    <artifactId>arkrag-parent</artifactId>    <version>1.1.1</version>
+    <artifactId>arkrag-parent</artifactId>    <version>1.1.2</version>
   </parent>
 
   <artifactId>arkrag-mcp-stdio</artifactId>

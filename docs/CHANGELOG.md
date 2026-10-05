@@ -2,6 +2,11 @@
 
 > 从新到旧，一条一行。此前无文档记录（新项目，2026-10-04 建）。
 
+## 2026-10-05（v1.1.2）
+
+- **修复插件安装被 ArkWork VP2 校验拦截**：kind=`tool` 要求 `provides.tool`（单数对象，校验闸）与 `provides.tools`（非空数组，运行时消费）**双声明**——此前只写了数组。插件版本 1.1.2，产物 arkrag-plugin-1.1.2.zip。
+- 同步 ARCHITECTURE.md §9 双声明契约说明；全模块版本升 1.1.2。
+
 ## 2026-10-04（v1.1.1）
 
 - **JDK 17 支持**（用户要求）：编译目标 21→17；代码替换 Java 21 API（List.getFirst 等 4 处）；依赖基线核验（MCP SDK 2.0.1 / LangChain4j 1.21 / Boot 3.5.16 字节码均为 61=Java 17，无需降级）；真机 JDK 17.0.16 全链路实测（health/admin/摄入 READY/检索命中）通过。产物全量重打（jar/plugin zip 1.1.1）。

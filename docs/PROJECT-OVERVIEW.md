@@ -45,7 +45,7 @@ Java 21（JDK 22 构建（target 17，兼容 JDK 17+））· Spring Boot 3.5.16 
 ARKRAG_TOKEN=<≥16位> java -jar dist/arkrag-server.jar
 open http://127.0.0.1:8964/admin   # 控制台里在线配置 Embedding/Chat
 
-# ArkWork：设置→插件→安装 dist/arkrag-plugin-1.1.0.zip；或 MCP stdio 指 scripts/arkrag-mcp-stdio.sh
+# ArkWork：设置→插件→安装 dist/arkrag-plugin-1.1.2.zip；或 MCP stdio 指 scripts/arkrag-mcp-stdio.sh
 ```
 
 详见 README.md；离线冒烟（无外部 API）：`node scripts/mock-embedding-server.mjs 8965 1024`。

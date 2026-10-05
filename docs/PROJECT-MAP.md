@@ -17,7 +17,7 @@ ArkRAG/
 ├── scripts/                 # start-server / arkrag-mcp-stdio（sh+bat）/ build-dist /
 │                            # run-tests / mock-embedding-server（含 mock chat）
 ├── test-ui/host-mock.html   # 插件面板 UI 验收宿主模拟器
-├── dist/                    # 交付产物：arkrag-server.jar / arkrag-mcp-stdio.jar / arkrag-plugin-1.1.0.zip
+├── dist/                    # 交付产物：arkrag-server.jar / arkrag-mcp-stdio.jar / arkrag-plugin-1.1.2.zip
 └── docs/
     ├── PROJECT-MAP.md / PROJECT-OVERVIEW.md / CHANGELOG.md / ROADMAP.md
     ├── USAGE.md             # ★ 详细使用文档（安装/控制台/插件/MCP/API/FAQ/安全）

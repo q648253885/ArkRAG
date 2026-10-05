@@ -215,7 +215,8 @@ PUT /settings/model ─► 校验(URL http/https、model 非空；空/掩码 api
 
 ## 9. ArkWork 插件
 
-- **清单**（plugin.json，schemaVersion 1.1）：id `arkrag.rag`、kind `tool`、activation `onStartup`、permissions `["net","tools.register","storage","views.register"]`（全部在宿主白名单内）；`provides.tools` 声明三工具（**双闸**：声明 + 运行期 `ctx.ark.tools.register` 缺一不可）。
+- **清单**（plugin.json，schemaVersion 1.1）：id `arkrag.rag`、kind `tool`、activation `onStartup`、permissions `["net","tools.register","storage","views.register"]`（全部在宿主白名单内）；
+  kind=`tool` 的清单校验要求**双声明**：`provides.tool`（单数对象，VP2 校验闸）与 `provides.tools`（非空数组，运行时实际消费，gateway 双闸 declared 检查）。工具名必须 snake_case（正则 `/^[a-z][a-z0-9_]{1,63}$/`）。`provides.tools` 声明三工具（**双闸**：声明 + 运行期 `ctx.ark.tools.register` 缺一不可）。
 - **Host 半（main.js，utilityProcess）**：注册视图 `view:arkrag`（Book 图标 dock 面板）；工具 handler 经 `ctx.ark.net.fetch` 调服务 REST（返回 `{status,headers,body}` 已适配），模型结果格式化为"编号引用列表"文本；桥方法 `arkrag` 按 `op` 分发面板操作（getConfig/saveConfig/testConnection/listKbs/uploadFiles/...）；配置存 `ctx.ark.storage`。
 - **Client 半（index.html，iframe 沙箱）**：`lifecycle/activate` 握手（sessionId + 主题令牌注入 `applyTheme`）→ `host.call` 桥调用 → `reply` 回执；视觉仅消费宿主白名单 token（`var(--x, 回退值)`）。
 - **上传通道**：iframe FileReader 读文件为 base64 → Host 半 JSON `POST {title,base64}`（服务端解码走与 multipart 相同的 `submitFile`）——规避沙箱桥上的 multipart 不确定性；面板建议 ≤20MB。
